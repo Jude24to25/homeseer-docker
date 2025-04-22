@@ -35,7 +35,7 @@ echo
 # use buildx to create a new builder instance; if needed
 docker buildx create --driver-opt env.BUILDKIT_STEP_LOG_MAX_SIZE=10485760   \
                      --driver-opt env.BUILDKIT_STEP_LOG_MAX_SPEED=100000000 \
-                     --use --name homseer-builder || true;
+                     --use --name homeseer-builder || true;
 
 build () {
   # extract function argument values

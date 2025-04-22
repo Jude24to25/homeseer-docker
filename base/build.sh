@@ -38,7 +38,7 @@ echo
 # use buildx to create a new builder instance; if needed
 docker buildx create --driver-opt env.BUILDKIT_STEP_LOG_MAX_SIZE=10485760   \
                      --driver-opt env.BUILDKIT_STEP_LOG_MAX_SPEED=100000000 \
-                     --use --name homseer-builder || true;
+                     --use --name homeseer-builder || true;
 
 # perform multi-arch platform image builds; push the resulting image to the HomeSeer.sh DockerHub repository
 # (https://hub.docker.com/r/homeseer/homeseer)
