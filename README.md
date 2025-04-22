@@ -56,7 +56,7 @@ docker run \
        --publish 10300:10300 \
        --publish 10401:10401 \
        --publish 11000:11000 \
-       --env TZ=America/New_York \
+       --env TZ=America/Los_Angeles \
        --env LANG=en_US.UTF-8 \
        homeseer/homeseer:latest
 ```
@@ -115,7 +115,7 @@ services:
       - 10401:10401
       - 11000:11000
     environment:
-      TZ: America/New_York
+      TZ: America/Los_Angeles
       LANG: en_US.UTF-8
     volumes:
       - homeseer-data:/homeseer

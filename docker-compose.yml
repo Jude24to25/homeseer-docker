@@ -35,7 +35,7 @@ services:
       - 10401:10401
       - 11000:11000
     environment:
-      TZ: America/New_York
+      TZ: America/Los_Angeles
       LANG: en_US.UTF-8
     volumes:
       - homeseer-data:/homeseer

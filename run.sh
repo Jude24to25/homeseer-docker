@@ -13,7 +13,7 @@ docker run \
        --publish 10300:10300 \
        --publish 10401:10401 \
        --publish 11000:11000 \
-       --env TZ=America/New_York \
+       --env TZ=America/Los_Angeles \
        --env LANG=en_US.UTF-8 \
        --env HOMESEER_CREDENTIALS="default:default" \
        homeseer/homeseer:latest $@

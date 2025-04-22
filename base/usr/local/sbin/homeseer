@@ -61,7 +61,7 @@ function initialize_homeseer {
   echo " HOMESEER CONTAINER - SET TIME ZONE: $TZ"
   echo "**********************************************************************"
   echo
-  TZ="${TZ:=America/New_York}"
+  TZ="${TZ:=America/Los_Angeles}"
   LANG="${LANG:=en_US.UTF-8}"
   export LANG=$LANG
   export TZ=$TZ

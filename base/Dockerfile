@@ -14,7 +14,7 @@ STOPSIGNAL SIGQUIT
 
 # environment variables
 ENV LANG en_US.UTF-8
-ENV TZ "America/New_York"
+ENV TZ "America/Los_Angeles"
 ENV HOMESEER_FOLDER "/homeseer"
 ENV HOMESEER_CREDENTAILS ""
 
