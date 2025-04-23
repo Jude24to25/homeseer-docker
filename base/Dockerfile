@@ -21,7 +21,7 @@ ENV HOMESEER_CREDENTAILS ""
 # docker container image labels
 LABEL org.label-schema.schema-version="1.0"
 LABEL org.label-schema.build-date=$BUILDDATE
-LABEL org.label-schema.name="homeseer/base"
+LABEL org.label-schema.name="${DOCKER_IMAGE_BASE}"
 LABEL org.label-schema.description="HomeSeer Base Docker Image"
 LABEL org.label-schema.url="https://homeseer.sh/"
 LABEL org.label-schema.vcs-url="https://github.com/HomeSeerLinux/docker"

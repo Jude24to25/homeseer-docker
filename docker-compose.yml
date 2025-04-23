@@ -24,7 +24,7 @@ volumes:
 services:
   homeseer:
     container_name: homeseer
-    image: homeseer/homeseer:latest
+    image: ${DOCKER_IMAGE}:latest
     hostname: homeseer
     restart: unless-stopped
     network_mode: bridge

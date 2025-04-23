@@ -35,17 +35,36 @@ echo "* BUILDING HOMESEER LINUX BASE DOCKER IMAGE                          *"
 echo "**********************************************************************"
 echo
 
+# Load environment variables from .env file if it exists
+if [ -f .env ]; then
+  source .env
+fi
+
+# Ensure DOCKER_IMAGE is set
+if [ -z "$DOCKER_IMAGE" ]; then
+  echo "Error: DOCKER_IMAGE environment variable is not set."
+  echo "Please set it in .env or export it (e.g., export DOCKER_IMAGE=myrepository/homeseer)"
+  exit 1
+fi
+
+# Ensure DOCKER_IMAGE_BASE is set
+if [ -z "$DOCKER_IMAGE_BASE" ]; then
+  echo "Error: DOCKER_IMAGE_BASE environment variable is not set."
+  echo "Please set it in .env or export it (e.g., export DOCKER_IMAGE_BASE=myrepository/homeseer)"
+  exit 1
+fi
+
 # use buildx to create a new builder instance; if needed
 docker buildx create --driver-opt env.BUILDKIT_STEP_LOG_MAX_SIZE=10485760   \
                      --driver-opt env.BUILDKIT_STEP_LOG_MAX_SPEED=100000000 \
                      --use --name homeseer-builder || true;
 
 # perform multi-arch platform image builds; push the resulting image to the HomeSeer.sh DockerHub repository
-# (https://hub.docker.com/r/homeseer/homeseer)
+# (https://hub.docker.com/r/${DOCKER_IMAGE})
 docker buildx build \
   --build-arg BUILDDATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
   --build-arg VERSION="$VERSION" \
   --platform linux/amd64,linux/arm64 \
-  --tag homeseer/base:$VERSION \
-  --tag homeseer/base:latest \
+  --tag ${DOCKER_IMAGE_BASE}:$VERSION \
+  --tag ${DOCKER_IMAGE_BASE}:latest \
   . $@

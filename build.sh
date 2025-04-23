@@ -32,6 +32,25 @@ echo "* BUILDING HOMESEER LINUX DOCKER IMAGE                               *"
 echo "**********************************************************************"
 echo
 
+# Load environment variables from .env file if it exists
+if [ -f .env ]; then
+  source .env
+fi
+
+# Ensure DOCKER_IMAGE is set
+if [ -z "$DOCKER_IMAGE" ]; then
+  echo "Error: DOCKER_IMAGE environment variable is not set."
+  echo "Please set it in .env or export it (e.g., export DOCKER_IMAGE=myrepository/homeseer)"
+  exit 1
+fi
+
+# Ensure DOCKER_IMAGE_BASE is set
+if [ -z "$DOCKER_IMAGE_BASE" ]; then
+  echo "Error: DOCKER_IMAGE_BASE environment variable is not set."
+  echo "Please set it in .env or export it (e.g., export DOCKER_IMAGE_BASE=myrepository/homeseer)"
+  exit 1
+fi
+
 # use buildx to create a new builder instance; if needed
 docker buildx create --driver-opt env.BUILDKIT_STEP_LOG_MAX_SIZE=10485760   \
                      --driver-opt env.BUILDKIT_STEP_LOG_MAX_SPEED=100000000 \
@@ -45,13 +64,13 @@ build () {
   ARGS=$4
 
   # perform multi-arch platform image builds; push the resulting image to the HomeSeer.sh DockerHub repository
-  # (https://hub.docker.com/r/homeseer/homeseer)
+  # (https://hub.docker.com/r/${DOCKER_IMAGE})
   docker buildx build \
     --build-arg BUILDDATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
     --build-arg VERSION="$VERSION"     \
     --build-arg DOWNLOAD="$DOWNLOAD"   \
     --platform linux/amd64,linux/arm64 \
-    --tag homeseer/homeseer:$VERSION   \
+    --tag ${DOCKER_IMAGE}:$VERSION   \
     $TAGS . $ARGS
 }
 
@@ -118,7 +137,7 @@ build () {
 #build "4.2.21.0"  "https://homeseer.sh/download/archive/release/linux_4_2_21_0.tar.gz" "" $@
 
 # latest beta build
-build "4.2.20.13" "https://homeseer.sh/download/archive/beta/linux_4_2_20_13.tar.gz" "--tag homeseer/homeseer:beta" $@
+build "4.2.20.13" "https://homeseer.sh/download/archive/beta/linux_4_2_20_13.tar.gz" "--tag ${DOCKER_IMAGE}:beta" $@
 
 # latest release build
-build "4.2.21.2"  "https://homeseer.sh/download/archive/release/linux_4_2_21_2.tar.gz" "--tag homeseer/homeseer:latest" $@
+build "4.2.21.2"  "https://homeseer.sh/download/archive/release/linux_4_2_21_2.tar.gz" "--tag ${DOCKER_IMAGE}:latest" $@

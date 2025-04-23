@@ -42,3 +42,7 @@ Thumbs.db
 .idea/
 out/
 .idea_modules/
+
+# Miscelaneous #
+################
+.env

@@ -31,8 +31,27 @@ echo "* CLEANING HOMESEER DOCKER IMAGES                                    *"
 echo "**********************************************************************"
 echo
 
+# Load environment variables from .env file if it exists
+if [ -f .env ]; then
+  source .env
+fi
+
+# Ensure DOCKER_IMAGE is set
+if [ -z "$DOCKER_IMAGE" ]; then
+  echo "Error: DOCKER_IMAGE environment variable is not set."
+  echo "Please set it in .env or export it (e.g., export DOCKER_IMAGE=myrepository/homeseer)"
+  exit 1
+fi
+
+# Ensure DOCKER_IMAGE_BASE is set
+if [ -z "$DOCKER_IMAGE_BASE" ]; then
+  echo "Error: DOCKER_IMAGE_BASE environment variable is not set."
+  echo "Please set it in .env or export it (e.g., export DOCKER_IMAGE_BASE=myrepository/homeseer)"
+  exit 1
+fi
+
 # remove the builder instance
 docker buildx rm homeseer-builder || true
 
 # remove any containers from local Docker registry
-docker images -a | grep "homeseer/homeseer" | awk '{print $3}' | xargs docker rmi
+docker images -a | grep "${DOCKER_IMAGE}" | awk '{print $3}' | xargs docker rmi

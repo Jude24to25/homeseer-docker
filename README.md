@@ -1,5 +1,5 @@
-[![Docker](https://img.shields.io/docker/v/homeseer/homeseer/latest?color=darkgreen&logo=docker&label=DockerHub%20Latest%20Image)](https://hub.docker.com/repository/docker/homeseer/homeseer/)
-[![Docker](https://img.shields.io/docker/v/homeseer/homeseer/beta?color=red&logo=docker&label=DockerHub%20Beta%20Image)](https://hub.docker.com/repository/docker/homeseer/homeseer/)
+[![Docker](https://img.shields.io/docker/v/${DOCKER_IMAGE}/latest?color=darkgreen&logo=docker&label=DockerHub%20Latest%20Image)](https://hub.docker.com/repository/docker/${DOCKER_IMAGE}/)
+[![Docker](https://img.shields.io/docker/v/${DOCKER_IMAGE}/beta?color=red&logo=docker&label=DockerHub%20Beta%20Image)](https://hub.docker.com/repository/docker/${DOCKER_IMAGE}/)
 
 # Docker Container for HomeSeer 4 (Linux)
 
@@ -17,9 +17,9 @@
 This project provides Docker container images for HomeSeer 4 on Linux.     
 
 The docker images are published via Docker Hub:
- - [https://hub.docker.com/repository/docker/homeseer/homeseer](https://hub.docker.com/repository/docker/homeseer/homeseer)
- - [![Docker](https://img.shields.io/docker/v/homeseer/homeseer/latest?label=DockerHub%20Latest%20Image&logo=docker&style=social)](https://hub.docker.com/repository/docker/homeseer/homeseer/)
- - [![Docker](https://img.shields.io/docker/v/homeseer/homeseer/beta?label=DockerHub%20Beta%20Image&logo=docker&style=social)](https://hub.docker.com/repository/docker/homeseer/homeseer/)
+ - [https://hub.docker.com/repository/docker/${DOCKER_IMAGE}](https://hub.docker.com/repository/docker/${DOCKER_IMAGE})
+ - [![Docker](https://img.shields.io/docker/v/${DOCKER_IMAGE}/latest?label=DockerHub%20Latest%20Image&logo=docker&style=social)](https://hub.docker.com/repository/docker/${DOCKER_IMAGE}/)
+ - [![Docker](https://img.shields.io/docker/v/${DOCKER_IMAGE}/beta?label=DockerHub%20Beta%20Image&logo=docker&style=social)](https://hub.docker.com/repository/docker/${DOCKER_IMAGE}/)
 
 ---
 
@@ -30,7 +30,7 @@ Command to launch Docker container:
 docker run -it --name homeseer \       
        -p 80:80 -p 10200:10200 -p 10300:10300 -p 10401:10401 -p 11000:11000 \
        -v /etc/homeseer:/homeseer \
-       homeseer/homeseer:latest
+       ${DOCKER_IMAGE}:latest
 ```
 
 ---
@@ -58,7 +58,7 @@ docker run \
        --publish 11000:11000 \
        --env TZ=America/Los_Angeles \
        --env LANG=en_US.UTF-8 \
-       homeseer/homeseer:latest
+       ${DOCKER_IMAGE}:latest
 ```
 
 On the first run of the `homeseer` container, the script will take a few minutes while it 
@@ -104,7 +104,7 @@ volumes:
 services:
   homeseer:
     container_name: homeseer
-    image: homeseer/homeseer:latest
+    image: ${DOCKER_IMAGE}:latest
     hostname: homeseer
     restart: unless-stopped
     network_mode: bridge
