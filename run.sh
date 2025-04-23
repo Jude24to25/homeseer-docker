@@ -16,13 +16,6 @@ if [ -z "$DOCKER_IMAGE" ]; then
   exit 1
 fi
 
-# Ensure DOCKER_IMAGE_BASE is set
-if [ -z "$DOCKER_IMAGE_BASE" ]; then
-  echo "Error: DOCKER_IMAGE_BASE environment variable is not set."
-  echo "Please set it in .env or export it (e.g., export DOCKER_IMAGE_BASE=myrepository/homeseer)"
-  exit 1
-fi
-
 docker run \
        --interactive \
        --tty \

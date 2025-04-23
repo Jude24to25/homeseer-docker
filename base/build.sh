@@ -40,13 +40,6 @@ if [ -f .env ]; then
   source .env
 fi
 
-# Ensure DOCKER_IMAGE is set
-if [ -z "$DOCKER_IMAGE" ]; then
-  echo "Error: DOCKER_IMAGE environment variable is not set."
-  echo "Please set it in .env or export it (e.g., export DOCKER_IMAGE=myrepository/homeseer)"
-  exit 1
-fi
-
 # Ensure DOCKER_IMAGE_BASE is set
 if [ -z "$DOCKER_IMAGE_BASE" ]; then
   echo "Error: DOCKER_IMAGE_BASE environment variable is not set."
