@@ -53,30 +53,20 @@ echo "Building base image: ${DOCKER_IMAGE_BASE}:latest"
 # Use buildx to create a new builder instance; if needed
 docker buildx create --use --name ${DOCKER_IMAGE##*/}-builder --platform $BUILD_PLATFORMS;
 
-build () {
-  # Extract function argument values
-  VERSION=$1
-  DOWNLOAD=$2
-  TAGS=$3
-  ARGS=$4
-
-  # Perform multi-arch platform image builds; push the resulting image to repository (https://hub.docker.com/r/${DOCKER_IMAGE})
-  docker buildx build \
-    --build-arg VERSION="$VERSION" \
-    --build-arg DOCKER_IMAGE="${DOCKER_IMAGE}" \
-    --build-arg DOCKER_IMAGE_BASE="${DOCKER_IMAGE_BASE}" \
-    --build-arg HOMESEER_DOWNLOAD_URL="$DOWNLOAD" \
-    --build-arg LABEL_SCHEMA_URL="$LABEL_SCHEMA_URL" \
-    --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
-    --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
-    --build-arg BUILD_PLATFORMS="$BUILD_PLATFORMS" \
-    --platform "$BUILD_PLATFORMS" \
-    --tag "${DOCKER_IMAGE}:$VERSION" \
-    --cache-from "type=local,src=/tmp/.buildx-cache" \
-    --cache-to "type=local,dest=/tmp/.buildx-cache" \
-    --load \
-    $TAGS . $ARGS
-}
-
-# Latest release build
-build "$VERSION" "${HOMESEER_DOWNLOAD_URL}" "--tag ${DOCKER_IMAGE}:latest" $@
+# Perform multi-arch platform image builds; push the resulting image to repository (https://hub.docker.com/r/${DOCKER_IMAGE})
+docker buildx build \
+  --build-arg VERSION="$VERSION" \
+  --build-arg DOCKER_IMAGE="${DOCKER_IMAGE}" \
+  --build-arg DOCKER_IMAGE_BASE="${DOCKER_IMAGE_BASE}" \
+  --build-arg HOMESEER_DOWNLOAD_URL="$DOWNLOAD" \
+  --build-arg LABEL_SCHEMA_URL="$LABEL_SCHEMA_URL" \
+  --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
+  --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
+  --build-arg BUILD_PLATFORMS="$BUILD_PLATFORMS" \
+  --platform "$BUILD_PLATFORMS" \
+  --tag "${DOCKER_IMAGE}:$VERSION" \
+  --tag "${DOCKER_IMAGE}:latest" \
+  --cache-from "type=local,src=/tmp/.buildx-cache" \
+  --cache-to "type=local,dest=/tmp/.buildx-cache" \
+  --load \
+  .
