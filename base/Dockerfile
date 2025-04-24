@@ -8,9 +8,9 @@ ARG DOCKER_IMAGE_BASE
 ARG LABEL_SCHEMA_URL
 ARG LABEL_SCHEMA_VCS_URL
 ARG LABEL_SCHEMA_VENDOR
-ARG TARGETARCH
-ARG BUILDDATE
+ARG BUILD_PLATFORMS
 ARG VERSION
+ARG BUILDDATE
 ARG DEBIAN_FRONTEND=noninteractive
 
 # custom STOP signal for 'docker stop'
@@ -33,7 +33,7 @@ LABEL org.label-schema.vendor="$LABEL_SCHEMA_VENDOR"
 LABEL org.label-schema.version="$VERSION"
 
 RUN echo "=========================================================" && \
-    echo "  BUILDING DOCKER HOMESEER BASE ($VERSION) IMAGE FOR: $TARGETARCH" && \
+    echo "  BUILDING DOCKER HOMESEER BASE ($VERSION) IMAGE FOR: $BUILD_PLATFORMS" && \
     echo "========================================================="
 
 # make sure APT packages are up to date

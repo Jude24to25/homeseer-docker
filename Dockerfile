@@ -7,9 +7,9 @@ ARG HOMESEER_DOWNLOAD_URL
 ARG LABEL_SCHEMA_URL
 ARG LABEL_SCHEMA_VCS_URL
 ARG LABEL_SCHEMA_VENDOR
-ARG TARGETARCH
-ARG BUILDDATE
+ARG BUILD_PLATFORMS
 ARG VERSION
+ARG BUILDDATE
 ARG DEBIAN_FRONTEND=noninteractive
 FROM ${DOCKER_IMAGE_BASE}:latest
 
@@ -24,7 +24,7 @@ LABEL org.label-schema.vendor="$LABEL_SCHEMA_VENDOR"
 LABEL org.label-schema.version=$VERSION
 
 RUN echo "========================================================="
-RUN echo "  BUILDING DOCKER HOMESEER ($VERSION) IMAGE FOR: $TARGETARCH"
+RUN echo "  BUILDING DOCKER HOMESEER ($VERSION) IMAGE FOR: $BUILD_PLATFORMS"
 RUN echo "========================================================="
 
 # Configure runtime environment variables
