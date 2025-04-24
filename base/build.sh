@@ -27,8 +27,6 @@
 #-----------------------------------------------------------------------------------------
 
 # docker image version
-VERSION="4.0"
-
 echo
 echo "**********************************************************************"
 echo "* BUILDING HOMESEER LINUX BASE DOCKER IMAGE                          *"
@@ -40,24 +38,42 @@ if [ -f .env ]; then
   source .env
 fi
 
-# Ensure DOCKER_IMAGE_BASE is set
-if [ -z "$DOCKER_IMAGE_BASE" ]; then
-  echo "Error: DOCKER_IMAGE_BASE environment variable is not set."
-  echo "Please set it in .env or export it (e.g., export DOCKER_IMAGE_BASE=myrepository/homeseer)"
+# Check if all required variables are set
+if [ -z "$DOCKER_IMAGE" ] || [ -z "$DOCKER_IMAGE_BASE" ] || [ -z "$HOMESEER_DOWNLOAD_URL" ] || \
+   [ -z "$LABEL_SCHEMA_URL" ] || [ -z "$LABEL_SCHEMA_VCS_URL" ] || [ -z "$LABEL_SCHEMA_VENDOR" ] || \
+   [ -z "$BUILD_PLATFORMS" ]; then
+  echo "Error: One or more required environment variables are not set in .env."
+  echo "Please define the following in .env:"
+  echo "  DOCKER_IMAGE (e.g., heinz57sriracha/homeseer)"
+  echo "  DOCKER_IMAGE_BASE (e.g., heinz57sriracha/homeseer-base)"
+  echo "  HOMESEER_DOWNLOAD_URL (e.g., https://homeseer.com/updates4/linux_4_2_22_4.tar.gz)"
+  echo "  LABEL_SCHEMA_URL (e.g., https://github.com/Jude24to25/homeseer-docker)"
+  echo "  LABEL_SCHEMA_VCS_URL (e.g., https://github.com/Jude24to25/homeseer-docker)"
+  echo "  LABEL_SCHEMA_VENDOR (e.g., Heinz57Sriracha)"
+  echo "  BUILD_PLATFORMS (e.g., linux/amd64; linux/arm64; or linux/amd64,linux/arm64)"
   exit 1
 fi
 
-# use buildx to create a new builder instance; if needed
+# Validate BUILD_PLATFORMS
+if ! echo "$BUILD_PLATFORMS" | grep -Eq '^(linux/amd64|linux/arm64|linux/amd64,linux/arm64)$'; then
+  echo "Error: BUILD_PLATFORMS must be 'linux/amd64', 'linux/arm64', or 'linux/amd64,linux/arm64'."
+  exit 1
+fi
+
+# Use buildx to create a new builder instance; if needed
 docker buildx create --driver-opt env.BUILDKIT_STEP_LOG_MAX_SIZE=10485760   \
                      --driver-opt env.BUILDKIT_STEP_LOG_MAX_SPEED=100000000 \
-                     --use --name homeseer-builder || true;
+                     --use --name ${DOCKER_IMAGE_BASE##*/}-builder || true;
 
-# perform multi-arch platform image builds; push the resulting image to the HomeSeer.sh DockerHub repository
-# (https://hub.docker.com/r/${DOCKER_IMAGE})
+# Perform multi-arch platform image builds
 docker buildx build \
-  --build-arg BUILDDATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-  --build-arg VERSION="$VERSION" \
-  --platform linux/amd64,linux/arm64 \
-  --tag ${DOCKER_IMAGE_BASE}:$VERSION \
+  --build-arg VERSION="base" \
+  --build-arg LABEL_SCHEMA_URL="$LABEL_SCHEMA_URL" \
+  --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
+  --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
+  --platform "$BUILD_PLATFORMS" \
   --tag ${DOCKER_IMAGE_BASE}:latest \
-  . $@
+  --cache-from=type=registry,ref="${DOCKER_IMAGE_BASE}:latest" \
+  --cache-to=type=inline \
+  --push \
+  -f base/Dockerfile base/ $@

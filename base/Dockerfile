@@ -4,6 +4,10 @@
 FROM mono:6.12.0
 
 # build arguments
+ARG DOCKER_IMAGE_BASE
+ARG LABEL_SCHEMA_URL
+ARG LABEL_SCHEMA_VCS_URL
+ARG LABEL_SCHEMA_VENDOR
 ARG TARGETARCH
 ARG BUILDDATE
 ARG VERSION
@@ -16,17 +20,17 @@ STOPSIGNAL SIGQUIT
 ENV LANG en_US.UTF-8
 ENV TZ "America/Los_Angeles"
 ENV HOMESEER_FOLDER "/homeseer"
-ENV HOMESEER_CREDENTAILS ""
+ENV HOMESEER_CREDENTIALS ""
 
 # docker container image labels
 LABEL org.label-schema.schema-version="1.0"
 LABEL org.label-schema.build-date=$BUILDDATE
 LABEL org.label-schema.name="${DOCKER_IMAGE_BASE}"
 LABEL org.label-schema.description="HomeSeer Base Docker Image"
-LABEL org.label-schema.url="https://homeseer.sh/"
-LABEL org.label-schema.vcs-url="https://github.com/HomeSeerLinux/docker"
-LABEL org.label-schema.vendor="Homeseer.sh"
-LABEL org.label-schema.version=$VERSION
+LABEL org.label-schema.url="$LABEL_SCHEMA_URL"
+LABEL org.label-schema.vcs-url="$LABEL_SCHEMA_VCS_URL"
+LABEL org.label-schema.vendor="$LABEL_SCHEMA_VENDOR"
+LABEL org.label-schema.version="$VERSION"
 
 RUN echo "=========================================================" && \
     echo "  BUILDING DOCKER HOMESEER BASE ($VERSION) IMAGE FOR: $TARGETARCH" && \
@@ -105,4 +109,4 @@ VOLUME ["/homeseer"]
 WORKDIR "/homeseer"
 
 # launch homeseer script in container on startup
-CMD ["/usr/local/sbin/homeseer"]
+ENTRYPOINT ["/usr/local/sbin/homeseer"]
