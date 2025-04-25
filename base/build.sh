@@ -36,18 +36,13 @@ echo
 source .env
 ./check-env.sh
 
-# Use buildx to create a new builder instance; if needed
-docker buildx create --use --name ${DOCKER_IMAGE_BASE##*/}-builder --platform $BUILD_PLATFORMS;
-
 # Perform multi-arch platform image builds
-docker buildx build \
+docker build \
   --build-arg VERSION="base" \
   --build-arg LABEL_SCHEMA_URL="$LABEL_SCHEMA_URL" \
   --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
   --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
-  --platform "$BUILD_PLATFORMS" \
   --tag ${DOCKER_IMAGE_BASE}:latest \
-  --cache-from "type=local,src=/tmp/.buildx-cache" \
-  --cache-to "type=local,dest=/tmp/.buildx-cache" \
-  --load \
-  -f base/Dockerfile base/ $@
+  --cache-from ${DOCKER_IMAGE_BASE}:latest \
+  --file base/Dockerfile \
+  base/ $@

@@ -35,7 +35,6 @@ echo
 # Load environment variables from .env file if it exists and check if variables are set
 source .env
 ./check-env.sh
-./clean.sh
 
 # Extract version from HOMESEER_DOWNLOAD_URL
 VERSION=$(basename "$HOMESEER_DOWNLOAD_URL" | sed -n 's/.*linux_\([0-9]_[0-9]_[0-9]\{1,\}_[0-9]\).*/\1/p' | tr '_' '.')
@@ -48,25 +47,21 @@ echo "Extracted HomeSeer version: $VERSION"
 #-----------------------------------------------------------------------------------------
 # Build the base image and then HomeSeer image
 echo "Building base image: ${DOCKER_IMAGE_BASE}:latest"
-./base/build.sh
-
-# Use buildx to create a new builder instance; if needed
-docker buildx create --use --name ${DOCKER_IMAGE##*/}-builder --platform $BUILD_PLATFORMS;
+#./base/build.sh
 
 # Perform multi-arch platform image builds; push the resulting image to repository (https://hub.docker.com/r/${DOCKER_IMAGE})
-docker buildx build \
+echo "Building HomeSeer image: ${DOCKER_IMAGE}:latest"
+docker images
+docker build \
   --build-arg VERSION="$VERSION" \
   --build-arg DOCKER_IMAGE="${DOCKER_IMAGE}" \
   --build-arg DOCKER_IMAGE_BASE="${DOCKER_IMAGE_BASE}" \
-  --build-arg HOMESEER_DOWNLOAD_URL="$DOWNLOAD" \
+  --build-arg HOMESEER_DOWNLOAD_URL="$HOMESEER_DOWNLOAD_URL" \
   --build-arg LABEL_SCHEMA_URL="$LABEL_SCHEMA_URL" \
   --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
   --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
-  --build-arg BUILD_PLATFORMS="$BUILD_PLATFORMS" \
-  --platform "$BUILD_PLATFORMS" \
   --tag "${DOCKER_IMAGE}:$VERSION" \
   --tag "${DOCKER_IMAGE}:latest" \
-  --cache-from "type=local,src=/tmp/.buildx-cache" \
-  --cache-to "type=local,dest=/tmp/.buildx-cache" \
-  --load \
+  --cache-from ${DOCKER_IMAGE}:latest \
+  --file Dockerfile \
   .

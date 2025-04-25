@@ -1,0 +1,21 @@
+{
+  "image": "lscr.io/linuxserver/code-server:latest",
+  "runArgs": [
+    "--network=docker_default",
+    "--network=socket_proxy",
+    "--env", "DOCKER_HOST=tcp://socket-proxy:2375"
+  ],
+  "extensions": [
+    "ms-azuretools.vscode-docker",
+    "ms-vscode-remote.remote-containers"
+  ],
+  "settings": {
+    "docker.environment": {
+      "DOCKER_HOST": "tcp://socket-proxy:2375"
+    }
+  },
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  "workspaceFolder": "/workspaces/homeseer-docker"
+}
