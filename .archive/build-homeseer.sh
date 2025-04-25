@@ -28,7 +28,7 @@
 
 echo
 echo "**********************************************************************"
-echo "* BUILDING HOMESEER LINUX BASE DOCKER IMAGE                          *"
+echo "* BUILDING HOMESEER LINUX DOCKER IMAGE                               *"
 echo "**********************************************************************"
 echo
 
@@ -36,13 +36,34 @@ echo
 source .env
 ./check-env.sh
 
-# Perform multi-arch platform image builds
+# Extract version from HOMESEER_DOWNLOAD_URL
+VERSION=$(basename "$HOMESEER_DOWNLOAD_URL" | sed -n 's/.*linux_\([0-9]_[0-9]_[0-9]\{1,\}_[0-9]\).*/\1/p' | tr '_' '.')
+if [ -z "$VERSION" ]; then
+  echo "Error: Could not extract version from HOMESEER_DOWNLOAD_URL."
+  exit 1
+fi
+echo "Extracted HomeSeer version: $VERSION"
+
+#-----------------------------------------------------------------------------------------
+# Build the base image and then HomeSeer image
+echo "Building base image: ${DOCKER_IMAGE_BASE}:latest"
+./base/build.sh
+
+# Perform multi-arch platform image builds; push the resulting image to repository (https://hub.docker.com/r/${DOCKER_IMAGE})
+echo "Building HomeSeer image: ${DOCKER_IMAGE}:latest"
+
 docker build \
-  --build-arg VERSION="base" \
+  --build-arg VERSION="$VERSION" \
+  --build-arg DOCKER_IMAGE="${DOCKER_IMAGE}" \
+  --build-arg DOCKER_IMAGE_BASE="${DOCKER_IMAGE_BASE}" \
+  --build-arg HOMESEER_DOWNLOAD_URL="$HOMESEER_DOWNLOAD_URL" \
   --build-arg LABEL_SCHEMA_URL="$LABEL_SCHEMA_URL" \
   --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
   --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
-  --tag ${DOCKER_IMAGE_BASE}:latest \
-  --cache-from ${DOCKER_IMAGE_BASE}:latest \
-  --file base/Dockerfile \
-  base/ $@
+  --tag "${DOCKER_IMAGE}:$VERSION" \
+  --tag "${DOCKER_IMAGE}:latest" \
+  --cache-from ${DOCKER_IMAGE}:latest \
+  --file Dockerfile \
+  --load \
+  .
+docker images | grep "${DOCKER_IMAGE}"
