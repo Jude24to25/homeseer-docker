@@ -116,13 +116,13 @@ EXPOSE 80 10200 10300 10401 11000
 # Define volume
 VOLUME ["/homeseer"]
 
-# Download and install HomeSeer
+# Download HomeSeer
 RUN mkdir -p /homeseer && \
     chown homeseer:homeseer /homeseer && \
-    wget -O /homeseer.tar.gz "$HOMESEER_DOWNLOAD_URL" && \
-    tar -xzf /homeseer.tar.gz -C /homeseer && \
-    rm /homeseer.tar.gz && \
-    chown -R homeseer:homeseer /homeseer
+    wget -O /homeseer.tar.gz "$HOMESEER_DOWNLOAD_URL"
+# RUN tar --strip-components=1 -xzvf /homeseer.tar.gz -C /homeseer && \
+#     rm /homeseer.tar.gz && \
+#     chown -R homeseer:homeseer /homeseer
 
 # Set user and working directory
 USER homeseer
