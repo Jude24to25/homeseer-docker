@@ -40,7 +40,8 @@ if [ -z "$VERSION" ]; then
   echo "Error: Could not extract version from HOMESEER_DOWNLOAD_URL."
   exit 1
 fi
-echo "HS Version:   $VERSION"
+echo "HS Version:    $VERSION"
+echo "  "
 
 # Warn about multi-platform builds with --load
 if echo "$BUILD_PLATFORMS" | grep -q ',' && [ "${PUSH_TO_REGISTRY:-false}" != "true" ]; then
@@ -59,8 +60,8 @@ trap 'docker buildx rm homeseer-builder 2>/dev/null || true' EXIT
 #-----------------------------------------------------------------------------------------
 # Build HomeSeer image
 echo "Building HomeSeer image: ${IMAGE_OUTPUT}:$VERSION"
-
 docker buildx build \
+  --progress=plain \
   --build-arg IMAGE_BASE_NAME="${IMAGE_BASE_NAME}" \
   --build-arg IMAGE_BASE_TAG="${IMAGE_BASE_TAG}" \
   --build-arg IMAGE_OUTPUT="${IMAGE_OUTPUT}" \
@@ -72,13 +73,18 @@ docker buildx build \
   --build-arg LABEL_SCHEMA_URL="$LABEL_SCHEMA_URL" \
   --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
   --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
+  --build-arg DEBIAN_FRONTEND="noninteractive" \
   --cache-from "${IMAGE_OUTPUT}:latest" \
-  --cache-to=type=inline \
+  #--cache-to=type=inline \
   --tag "${IMAGE_OUTPUT}:latest" \
   --tag "${IMAGE_OUTPUT}:$VERSION" \
   --platform $BUILD_PLATFORMS \
   --file Dockerfile \
   --load \
-  base/
+  . || {
+    echo "Warning: Build failed, checking for images anyway..."
+    docker images | grep "${IMAGE_OUTPUT}" || echo "No images found for ${IMAGE_OUTPUT}"
+    exit 1
+  }
 
 docker images | grep "${IMAGE_OUTPUT}"

@@ -19,7 +19,7 @@ ARG BUILDDATE
 ARG LABEL_SCHEMA_URL
 ARG LABEL_SCHEMA_VCS_URL
 ARG LABEL_SCHEMA_VENDOR
-ARG DEBIAN_FRONTEND=noninteractive
+ARG DEBIAN_FRONTEND
 
 # Custom STOP signal
 STOPSIGNAL SIGQUIT
@@ -88,9 +88,9 @@ RUN useradd -ms /bin/bash homeseer
 #    - HomeSeer override scripts
 #    - container runtime scripts
 #    - default config
-COPY homeseer/*.sh /scripts/
-COPY usr/local/sbin/* /scripts/
-COPY etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
+COPY base/homeseer/*.sh /scripts/
+COPY base/usr/local/sbin/* /scripts/
+COPY base/etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
 
 # Configure scripts
 #   Ensure scripts are executable
