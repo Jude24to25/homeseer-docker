@@ -46,4 +46,4 @@ out/
 # Miscelaneous #
 ################
 .env
-.devcontainer
+/.devcontainer
