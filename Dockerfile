@@ -1,123 +1,130 @@
 #########################################
 # HOMESEER (V4) LINUX - DOCKERFILE
 #########################################
-FROM mono:6.12.0
 
-# build arguments
-ARG DOCKER_IMAGE
+# Base image defined by build arguments
+ARG IMAGE_BASE_NAME
+ARG IMAGE_BASE_TAG
+FROM ${IMAGE_BASE_NAME}:${IMAGE_BASE_TAG}
+
+# Build arguments
+ARG IMAGE_BASE_NAME
+ARG IMAGE_BASE_TAG
+ARG IMAGE_OUTPUT
 ARG HOMESEER_DOWNLOAD_URL
+ARG TZ
+ARG LANG
+ARG VERSION
+ARG BUILDDATE
 ARG LABEL_SCHEMA_URL
 ARG LABEL_SCHEMA_VCS_URL
 ARG LABEL_SCHEMA_VENDOR
-ARG BUILD_PLATFORMS
-ARG VERSION
-ARG BUILDDATE
 ARG DEBIAN_FRONTEND=noninteractive
 
-# custom STOP signal for 'docker stop'
+# Custom STOP signal
 STOPSIGNAL SIGQUIT
 
-# environment variables
-ENV LANG en_US.UTF-8
-ENV TZ "America/Los_Angeles"
-ENV HOMESEER_FOLDER "/homeseer"
-ENV HOMESEER_CREDENTIALS ""
+# Environment variables
+ENV LANG="$LANG"
+ENV TZ="$TZ"
+ENV HOMESEER_CREDENTIALS=""
 
-# docker container image labels
+# Docker container image labels
 LABEL org.label-schema.schema-version="1.0"
 LABEL org.label-schema.build-date=$BUILDDATE
-LABEL org.label-schema.name="${DOCKER_IMAGE}"
+LABEL org.label-schema.name="${IMAGE_OUTPUT}"
 LABEL org.label-schema.description="HomeSeer Docker Image"
 LABEL org.label-schema.url="$LABEL_SCHEMA_URL"
 LABEL org.label-schema.vcs-url="$LABEL_SCHEMA_VCS_URL"
 LABEL org.label-schema.vendor="$LABEL_SCHEMA_VENDOR"
 LABEL org.label-schema.version="$VERSION"
 
-RUN echo "=========================================================" && \
-    echo "  BUILDING DOCKER HOMESEER ($VERSION) IMAGE FOR: $BUILD_PLATFORMS" && \
-    echo "========================================================="
+# Verify input variables
+RUN echo "ENVIRONMENT VARIABLES" && \
+    echo "HomeSeer URL:  $HOMESEER_DOWNLOAD_URL" && \
+    echo "Base Image:    ${IMAGE_BASE_NAME}:${IMAGE_BASE_TAG}" && \
+    echo "Output Image:  $IMAGE_OUTPUT" && \
+    echo "Timezone:      $TZ" && \
+    echo "Language:      $LANG" && \
+    echo "Version:       $VERSION" && \
+    echo "Build Date:    $BUILDDATE" && \
+    echo " "
 
-# make sure APT packages are up to date
-RUN apt-get update && apt-get upgrade --yes
-
-# set non-interactive frontend
-RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
-
-# update locale/language
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y locales
-RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
+# Install dependencies and configure
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections && \
+#   Update locale/language
+    apt-get install -y locales && \
+    sed -i -e "s/# $LANG UTF-8/$LANG UTF-8/" /etc/locale.gen && \
     dpkg-reconfigure --frontend=noninteractive locales && \
-    update-locale LANG=en_US.UTF-8
+    update-locale LANG=$LANG && \
+#   Install container tools
+    apt-get install -y tmux curl wget nano apt-utils net-tools iputils-ping etherwake ssh-client mosquitto-clients dos2unix && \
+#   Install HomeSeer dependencies
+    apt-get install -y aha ffmpeg alsa-utils flite chromium avahi-discover libavahi-compat-libdnssd-dev libnss-mdns \
+                      avahi-daemon avahi-utils mdns-scan && \
+    apt-get remove -y brltty && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# install container tools
-RUN apt-get install --yes tmux curl wget nano apt-utils net-tools iputils-ping etherwake ssh-client mosquitto-clients dos2unix
+# Install Mono for non-mono base images
+RUN if [ "$IMAGE_BASE_NAME" != "mono" ]; then \
+      apt-get update && \
+      apt-get install -y gnupg ca-certificates && \
+      gpg --homedir /tmp --no-default-keyring --keyring /usr/share/keyrings/mono-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
+      echo "deb [signed-by=/usr/share/keyrings/mono-archive-keyring.gpg] https://download.mono-project.com/repo/ubuntu stable-focal main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
+      apt-get update && \
+      apt-get install -y mono-complete mono-devel && \
+      apt-get clean && rm -rf /var/lib/apt/lists/*; \
+    fi && \
+    apt-get update && \
+    apt-get install -y mono-vbnc mono-xsp4 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# install HomeSeer dependencies
-# alsa-base (not available in Debian upstream)
-RUN apt-get install --yes aha ffmpeg alsa-utils tmux curl wget nano flite chromium \
-                          avahi-discover libavahi-compat-libdnssd-dev libnss-mdns  \
-                          avahi-daemon avahi-utils mdns-scan mono-complete         \
-                          mono-devel mono-vbnc mono-xsp4 && \
-    apt-get remove --yes brltty
+# Create homeseer user
+RUN useradd -ms /bin/bash homeseer
 
-# clean APT cache
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# copy container homeseer override scripts
-COPY homeseer/*.sh    /scripts/
-
-# copy container runtime scripts
+# Copy scripts from base/
+#    - HomeSeer override scripts
+#    - container runtime scripts
+#    - default config
+COPY homeseer/*.sh /scripts/
 COPY usr/local/sbin/* /scripts/
+COPY etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
 
-# ensure scripts are executable
-RUN chmod a+x /scripts/*
-
-# ensure scripts are line-encoded for unix/linux
-RUN dos2unix /scripts/*
-
-# remove "reboot" and "shutdown" binaries from the container
-# (we will replace with symlinks to scripts)
-RUN rm -f /sbin/reboot && rm -f /sbin/shutdown
-
-# create symlinks in bin path ("/usr/local/sbin")
-RUN ln -sf /scripts/homeseer /usr/local/sbin/homeseer && \
-    ln -sf /scripts/reboot   /usr/local/sbin/reboot   && \
+# Configure scripts
+#   Ensure scripts are executable
+RUN chmod a+x /scripts/* && \
+#   Ensure scripts are line-encoded for unix/linux
+    dos2unix /scripts/* && \
+#   Remove "reboot" and "shutdown" binaries from the container (we will replace with symlinks to scripts)
+    rm -f /sbin/reboot && rm -f /sbin/shutdown && \
+#   Create symlinks in bin path ("/usr/local/sbin")
+    ln -sf /scripts/homeseer /usr/local/sbin/homeseer && \
+    ln -sf /scripts/reboot /usr/local/sbin/reboot && \
     ln -sf /scripts/shutdown /usr/local/sbin/shutdown && \
     ln -sf /scripts/poweroff /usr/local/sbin/poweroff
 
-# copy default configuration files
-COPY etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
-
-# make folders for DBUS & AVAHI
-# apply folder permissions for DBUS & AVAHI
-RUN mkdir -p /var/run/dbus && \
-    mkdir -p /var/run/avahi-daemon && \
+# Configure DBUS and AVAHI
+RUN mkdir -p /var/run/dbus /var/run/avahi-daemon && \
     chown messagebus:messagebus /var/run/dbus && \
     chown avahi:avahi /var/run/avahi-daemon
 
-# define IP ports to be exposed by this container
-# 80    : HTTP/WEB
-# 10200 : HS-TOUCH
-# 10300 : myHS
-# 10401 : SPEAKER CLIENTS
-# 11000 : ASCII/JSON REMOTE API
+# Expose ports
 EXPOSE 80 10200 10300 10401 11000
 
-# define required volume
+# Define volume
 VOLUME ["/homeseer"]
-# set the working path
-WORKDIR "/homeseer"
-# launch homeseer script in container on startup
-ENTRYPOINT ["/usr/local/sbin/homeseer"]
 
-# ___________________________________________________
-# FROM HOMESEER BUILD.SH
-# Download and install HomeSeer Linux
-RUN wget -O /homeseer.tar.gz "$HOMESEER_DOWNLOAD_URL" && \
+# Download and install HomeSeer
+RUN mkdir -p /homeseer && \
+    chown homeseer:homeseer /homeseer && \
+    wget -O /homeseer.tar.gz "$HOMESEER_DOWNLOAD_URL" && \
     tar -xzf /homeseer.tar.gz -C /homeseer && \
-    rm /homeseer.tar.gz
+    rm /homeseer.tar.gz && \
+    chown -R homeseer:homeseer /homeseer
 
+# Set user and working directory
 USER homeseer
 WORKDIR /homeseer
 ENTRYPOINT ["/usr/local/sbin/homeseer"]
-# ___________________________________________________

@@ -37,9 +37,9 @@ source .env
 ./check-env.sh
 
 # remove the builder instance
-docker buildx rm ${DOCKER_IMAGE_BASE##*/}-builder || true
-docker buildx rm ${DOCKER_IMAGE##*/}-builder || true
+docker buildx rm homeseer-builder || true
+docker builder prune -a -f
+docker buildx prune -a -f
 
 # # remove any containers from local Docker registry
-# docker images -a | grep "${DOCKER_IMAGE_BASE}" | awk '{print $3}' | xargs docker rmi
-# docker images -a | grep "${DOCKER_IMAGE}" | awk '{print $3}' | xargs docker rmi
+# docker images -a | grep "${IMAGE_OUTPUT}" | awk '{print $3}' | xargs docker rmi

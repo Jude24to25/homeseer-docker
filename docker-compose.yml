@@ -15,7 +15,6 @@
 # --------------------------------------------------
 #    (Developed with ♥ by SavageSoftware, LLC.)
 # --------------------------------------------------
-version: '3.8'
 
 volumes:
   homeseer-data:
@@ -24,7 +23,7 @@ volumes:
 services:
   homeseer:
     container_name: homeseer
-    image: ${DOCKER_IMAGE}:latest
+    image: ${IMAGE_OUTPUT}:latest
     hostname: homeseer
     restart: unless-stopped
     network_mode: bridge
@@ -35,7 +34,7 @@ services:
       - 10401:10401
       - 11000:11000
     environment:
-      TZ: America/Los_Angeles
-      LANG: en_US.UTF-8
+      TZ: $TZ
+      LANG: $LANG
     volumes:
       - homeseer-data:/homeseer

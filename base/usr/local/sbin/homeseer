@@ -61,13 +61,29 @@ function initialize_homeseer {
   echo " HOMESEER CONTAINER - SET TIME ZONE: $TZ"
   echo "**********************************************************************"
   echo
-  TZ="${TZ:=America/Los_Angeles}"
-  LANG="${LANG:=en_US.UTF-8}"
-  export LANG=$LANG
-  export TZ=$TZ
-  ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-  dpkg-reconfigure --frontend noninteractive tzdata
-  update-locale LANG=$LANG
+
+  # Validate TZ and LANG
+  if [ -z "$TZ" ]; then
+      echo "Error: TZ environment variable is not set. Please define TZ in .env."
+      exit 1
+  fi
+  if [ -z "$LANG" ]; then
+      echo "Error: LANG environment variable is not set. Please define LANG in .env."
+      exit 1
+  fi
+
+  # Set timezone
+  ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
+  export LANG="$LANG"
+  export TZ="$TZ"
+
+  # TZ="${TZ:=America/Los_Angeles}"
+  # LANG="${LANG:=en_US.UTF-8}"
+  # export LANG=$LANG
+  # export TZ=$TZ
+  # ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+  # dpkg-reconfigure --frontend noninteractive tzdata
+  # update-locale LANG=$LANG
 
   echo
   echo "**********************************************************************"
