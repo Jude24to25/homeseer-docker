@@ -21,7 +21,7 @@ function install_homeseer {
 
   # extract the HomeSeer application file from the embedded archive file in the container
   echo "Installing HomeSeer application files; please wait ..."
-  tar --strip-components=1 -xzvf /homeseer.tar.gz -C /homeseer
+  tar --strip-components=2 -xzvf /homeseer.tar.gz -C /homeseer
 
   # write a flagging file to denote that we have installed the HomeSeer application in this container
   touch /homeseer-installed
