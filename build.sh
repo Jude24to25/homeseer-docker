@@ -69,16 +69,15 @@ docker buildx build \
   --build-arg TZ="$TZ" \
   --build-arg LANG="$LANG" \
   --build-arg VERSION="$VERSION" \
-  --build-arg BUILDDATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+  --build-arg BUILDDATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
   --build-arg LABEL_SCHEMA_URL="$LABEL_SCHEMA_URL" \
   --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
   --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
   --build-arg DEBIAN_FRONTEND="noninteractive" \
   --cache-from "${IMAGE_OUTPUT}:latest" \
-  #--cache-to=type=inline \
   --tag "${IMAGE_OUTPUT}:latest" \
   --tag "${IMAGE_OUTPUT}:$VERSION" \
-  --platform $BUILD_PLATFORMS \
+  --platform "$BUILD_PLATFORMS" \
   --file Dockerfile \
   --load \
   . || {

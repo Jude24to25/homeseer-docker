@@ -82,15 +82,11 @@ RUN if [ "$IMAGE_BASE_NAME" != "mono" ]; then \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Create homeseer user
-RUN useradd -ms /bin/bash homeseer
+RUN groupadd -g 1000 homeseer && useradd -u 1000 -g homeseer -m -s /bin/bash homeseer
 
-# Copy scripts from base/
-#    - HomeSeer override scripts
-#    - container runtime scripts
-#    - default config
+# Copy HomeSeer override and container runtime scripts from base/
 COPY base/homeseer/*.sh /scripts/
 COPY base/usr/local/sbin/* /scripts/
-COPY base/etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
 
 # Configure scripts
 #   Ensure scripts are executable
@@ -105,10 +101,20 @@ RUN chmod a+x /scripts/* && \
     ln -sf /scripts/shutdown /usr/local/sbin/shutdown && \
     ln -sf /scripts/poweroff /usr/local/sbin/poweroff
 
-# Configure DBUS and AVAHI
-RUN mkdir -p /var/run/dbus /var/run/avahi-daemon && \
+# Configure timezone
+RUN if [ ! -e /etc/localtime ]; then \
+      ln -sf /usr/share/zoneinfo/UTC /etc/localtime; \
+    fi && \
+    chown homeseer:homeseer /etc/localtime /etc/timezone
+
+# Copy avahi config, then configure DBUS and AVAHI
+COPY base/etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
+RUN mkdir -p /var/lib/dbus /var/run/dbus /var/run/avahi-daemon && \
     chown messagebus:messagebus /var/run/dbus && \
-    chown avahi:avahi /var/run/avahi-daemon
+    chown avahi:avahi /var/run/avahi-daemon && \
+    chown homeseer:homeseer /etc/avahi/avahi-daemon.conf && \
+    chown homeseer:homeseer /var/lib/dbus && \
+    chown homeseer:homeseer /var/run/dbus
 
 # Expose ports
 EXPOSE 80 10200 10300 10401 11000
@@ -120,9 +126,6 @@ VOLUME ["/homeseer"]
 RUN mkdir -p /homeseer && \
     chown homeseer:homeseer /homeseer && \
     wget -O /homeseer.tar.gz "$HOMESEER_DOWNLOAD_URL"
-# RUN tar --strip-components=1 -xzvf /homeseer.tar.gz -C /homeseer && \
-#     rm /homeseer.tar.gz && \
-#     chown -R homeseer:homeseer /homeseer
 
 # Set user and working directory
 USER homeseer

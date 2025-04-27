@@ -9,5 +9,5 @@ echo "**********************************************************************"
 echo " HOMESEER CONTAINER - SYSTEM REBOOT"
 echo "**********************************************************************"
 echo
-touch /homeseer-restart
+touch /homeseer/homeseer-restart
 

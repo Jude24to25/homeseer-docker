@@ -9,5 +9,5 @@ echo "**********************************************************************"
 echo " HOMESEER CONTAINER - RESTART"
 echo "**********************************************************************"
 echo
-touch /homeseer-restart
+touch /homeseer/homeseer-restart
 
