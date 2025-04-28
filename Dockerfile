@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 #########################################
 # HOMESEER (V4) LINUX - DOCKERFILE
 #########################################
@@ -29,29 +30,18 @@ ENV LANG="$LANG"
 ENV TZ="$TZ"
 ENV HOMESEER_CREDENTIALS=""
 
-# Docker container image labels
+# Docker container image labels (others moved to end to avoid cache invalidation)
 LABEL org.label-schema.schema-version="1.0"
-LABEL org.label-schema.build-date=$BUILDDATE
-LABEL org.label-schema.name="${IMAGE_OUTPUT}"
 LABEL org.label-schema.description="HomeSeer Docker Image"
-LABEL org.label-schema.url="$LABEL_SCHEMA_URL"
-LABEL org.label-schema.vcs-url="$LABEL_SCHEMA_VCS_URL"
-LABEL org.label-schema.vendor="$LABEL_SCHEMA_VENDOR"
-LABEL org.label-schema.version="$VERSION"
-
-# Verify input variables
-RUN echo "ENVIRONMENT VARIABLES" && \
-    echo "HomeSeer URL:  $HOMESEER_DOWNLOAD_URL" && \
-    echo "Base Image:    ${IMAGE_BASE_NAME}:${IMAGE_BASE_TAG}" && \
-    echo "Output Image:  $IMAGE_OUTPUT" && \
-    echo "Timezone:      $TZ" && \
-    echo "Language:      $LANG" && \
-    echo "Version:       $VERSION" && \
-    echo "Build Date:    $BUILDDATE" && \
-    echo " "
 
 # Install dependencies and configure
-RUN apt-get update && \
+RUN \
+#   Let Docker cache apt-get downloads    
+    --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+#   Fix Mono repository warning for mono base image
+    echo "deb [trusted=yes] https://download.mono-project.com/repo/debian stable-buster/snapshots/6.12.0.182 main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
+    apt-get update && \
     apt-get upgrade -y && \
     echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections && \
 #   Update locale/language
@@ -65,21 +55,16 @@ RUN apt-get update && \
     apt-get install -y aha ffmpeg alsa-utils flite chromium avahi-discover libavahi-compat-libdnssd-dev libnss-mdns \
                       avahi-daemon avahi-utils mdns-scan && \
     apt-get remove -y brltty && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Install Mono for non-mono base images
-RUN if [ "$IMAGE_BASE_NAME" != "mono" ]; then \
-      apt-get update && \
+#   Install Mono for non-mono base images
+    if [ "$IMAGE_BASE_NAME" != "mono" ]; then \
       apt-get install -y gnupg ca-certificates && \
       gpg --homedir /tmp --no-default-keyring --keyring /usr/share/keyrings/mono-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
-      echo "deb [signed-by=/usr/share/keyrings/mono-archive-keyring.gpg] https://download.mono-project.com/repo/ubuntu stable-focal main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
+      echo "deb [signed-by=/usr/share/keyrings/mono-archive-keyring.gpg] https://download.mono-project.com/repo/debian stable-buster main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
       apt-get update && \
-      apt-get install -y mono-complete mono-devel && \
-      apt-get clean && rm -rf /var/lib/apt/lists/*; \
+      apt-get install -y mono-complete mono-devel; \
     fi && \
-    apt-get update && \
     apt-get install -y mono-vbnc mono-xsp4 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean
 
 # Create homeseer user
 RUN groupadd -g 1000 homeseer && useradd -u 1000 -g homeseer -m -s /bin/bash homeseer
@@ -105,16 +90,20 @@ RUN chmod a+x /scripts/* && \
 RUN if [ ! -e /etc/localtime ]; then \
       ln -sf /usr/share/zoneinfo/UTC /etc/localtime; \
     fi && \
-    chown homeseer:homeseer /etc/localtime /etc/timezone
+    chown homeseer:homeseer /etc/localtime /etc/timezone && \
+    chmod u+w /etc /etc/localtime /etc/timezone
 
 # Copy avahi config, then configure DBUS and AVAHI
 COPY base/etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
 RUN mkdir -p /var/lib/dbus /var/run/dbus /var/run/avahi-daemon && \
     chown messagebus:messagebus /var/run/dbus && \
     chown avahi:avahi /var/run/avahi-daemon && \
-    chown homeseer:homeseer /etc/avahi/avahi-daemon.conf && \
     chown homeseer:homeseer /var/lib/dbus && \
-    chown homeseer:homeseer /var/run/dbus
+    chown homeseer:homeseer /var/run/dbus && \
+    chown homeseer:homeseer /etc/avahi/avahi-daemon.conf && \
+    chmod u+w /etc /etc/avahi && \
+    # Debug permissions
+    ls -ld /etc /etc/localtime /etc/timezone
 
 # Expose ports
 EXPOSE 80 10200 10300 10401 11000
@@ -125,7 +114,16 @@ VOLUME ["/homeseer"]
 # Download HomeSeer
 RUN mkdir -p /homeseer && \
     chown homeseer:homeseer /homeseer && \
+    chmod -R u+rwX /homeseer && \
     wget -O /homeseer.tar.gz "$HOMESEER_DOWNLOAD_URL"
+
+# Docker container image labels (moved to end to avoid cache invalidation)
+LABEL org.label-schema.build-date=$BUILDDATE
+LABEL org.label-schema.name="${IMAGE_OUTPUT}"
+LABEL org.label-schema.url="$LABEL_SCHEMA_URL"
+LABEL org.label-schema.vcs-url="$LABEL_SCHEMA_VCS_URL"
+LABEL org.label-schema.vendor="$LABEL_SCHEMA_VENDOR"
+LABEL org.label-schema.version="$VERSION"
 
 # Set user and working directory
 USER homeseer

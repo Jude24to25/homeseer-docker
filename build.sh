@@ -32,7 +32,7 @@ fi
 
 # Load environment variables from .env file if it exists and check if variables are set
 source .env
-./check-env.sh
+./env-check.sh
 
 # Extract version from HOMESEER_DOWNLOAD_URL
 VERSION=$(basename "$HOMESEER_DOWNLOAD_URL" | sed -n 's/.*linux_\([0-9]_[0-9]_[0-9]\{1,\}_[0-9]\).*/\1/p' | tr '_' '.')
@@ -74,7 +74,7 @@ docker buildx build \
   --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
   --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
   --build-arg DEBIAN_FRONTEND="noninteractive" \
-  --cache-from "${IMAGE_OUTPUT}:latest" \
+  --cache-from=type=local,src="${IMAGE_OUTPUT}:latest" \
   --tag "${IMAGE_OUTPUT}:latest" \
   --tag "${IMAGE_OUTPUT}:$VERSION" \
   --platform "$BUILD_PLATFORMS" \
