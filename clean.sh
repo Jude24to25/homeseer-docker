@@ -34,7 +34,7 @@ echo
 
 # # Load environment variables from .env file if it exists and check if variables are set
 # source .env
-# ./env-check.sh
+# ./check-env.sh
 
 # # remove the builder instance
 # docker buildx rm homeseer-builder || true

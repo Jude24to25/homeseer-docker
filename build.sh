@@ -32,7 +32,7 @@ fi
 
 # Load environment variables from .env file if it exists and check if variables are set
 source .env
-./env-check.sh
+./check-env.sh
 
 # Extract version from HOMESEER_DOWNLOAD_URL
 VERSION=$(basename "$HOMESEER_DOWNLOAD_URL" | sed -n 's/.*linux_\([0-9]_[0-9]_[0-9]\{1,\}_[0-9]\).*/\1/p' | tr '_' '.')
@@ -49,19 +49,32 @@ if echo "$BUILD_PLATFORMS" | grep -q ',' && [ "${PUSH_TO_REGISTRY:-false}" != "t
 fi
 
 #-----------------------------------------------------------------------------------------
-# Perform multi-arch platform image builds
-# Set up Buildx for multi-platform builds
-echo "Setting up Docker Buildx for platform: $BUILD_PLATFORMS"
-docker buildx create --use --name homeseer-builder --platform $BUILD_PLATFORMS
+# # Perform multi-arch platform image builds
+# # Set up Buildx for multi-platform builds
+# echo "Setting up Docker Buildx for platform: $BUILD_PLATFORMS"
+# docker buildx create --use --name homeseer-builder --platform $BUILD_PLATFORMS
 
-# Ensure Buildx builder is cleaned up on exit
-trap 'docker buildx rm homeseer-builder 2>/dev/null || true' EXIT
+# # Ensure Buildx builder is cleaned up on exit
+# trap 'docker buildx rm homeseer-builder 2>/dev/null || true' EXIT
+
+# Create a persistent buildx builder if it doesn't exist
+if ! docker buildx inspect homeseer-builder &>/dev/null; then
+  echo "Creating persistent buildx builder..."
+  docker buildx create --name homeseer-builder --use
+else
+  echo "Using existing buildx builder..."
+  docker buildx use homeseer-builder
+fi
+
+# Add these cache-specific flags
+CACHE_FLAGS=" --cache-to=type=local,dest=./docker-cache,mode=max"
 
 #-----------------------------------------------------------------------------------------
 # Build HomeSeer image
 echo "Building HomeSeer image: ${IMAGE_OUTPUT}:$VERSION"
 docker buildx build \
   --progress=plain \
+  $CACHE_FLAGS \
   --build-arg IMAGE_BASE_NAME="${IMAGE_BASE_NAME}" \
   --build-arg IMAGE_BASE_TAG="${IMAGE_BASE_TAG}" \
   --build-arg IMAGE_OUTPUT="${IMAGE_OUTPUT}" \
@@ -74,7 +87,6 @@ docker buildx build \
   --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
   --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
   --build-arg DEBIAN_FRONTEND="noninteractive" \
-  --cache-from=type=local,src="${IMAGE_OUTPUT}:latest" \
   --tag "${IMAGE_OUTPUT}:latest" \
   --tag "${IMAGE_OUTPUT}:$VERSION" \
   --platform "$BUILD_PLATFORMS" \
@@ -87,3 +99,5 @@ docker buildx build \
   }
 
 docker images | grep "${IMAGE_OUTPUT}"
+
+#   --cache-from=type=local,src="${IMAGE_OUTPUT}:latest" \

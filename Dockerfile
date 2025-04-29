@@ -86,24 +86,25 @@ RUN chmod a+x /scripts/* && \
     ln -sf /scripts/shutdown /usr/local/sbin/shutdown && \
     ln -sf /scripts/poweroff /usr/local/sbin/poweroff
 
-# Configure timezone
-RUN if [ ! -e /etc/localtime ]; then \
+# Configure timezone NOTE---> ADDED line 90 to address Line 94 onward.... NEED TO ALSO CHECK IF CACHE IS WORKING
+RUN apt-get install -y acl && \
+    if [ ! -e /etc/localtime ]; then \
       ln -sf /usr/share/zoneinfo/UTC /etc/localtime; \
     fi && \
-    chown homeseer:homeseer /etc/localtime /etc/timezone && \
-    chmod u+w /etc /etc/localtime /etc/timezone
+    setfacl -m g:homeseer:rw /var/lib/dbus /var/run/dbus /etc/avahi/avahi-daemon.conf
+    # chown homeseer:homeseer /etc/localtime /etc/timezone && \
+    # chmod u+w /etc /etc/localtime /etc/timezone
 
 # Copy avahi config, then configure DBUS and AVAHI
 COPY base/etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
 RUN mkdir -p /var/lib/dbus /var/run/dbus /var/run/avahi-daemon && \
     chown messagebus:messagebus /var/run/dbus && \
     chown avahi:avahi /var/run/avahi-daemon && \
-    chown homeseer:homeseer /var/lib/dbus && \
-    chown homeseer:homeseer /var/run/dbus && \
-    chown homeseer:homeseer /etc/avahi/avahi-daemon.conf && \
-    chmod u+w /etc /etc/avahi && \
-    # Debug permissions
-    ls -ld /etc /etc/localtime /etc/timezone
+    setfacl -m g:homeseer:rw /var/lib/dbus /var/run/dbus /etc/avahi/avahi-daemon.conf
+    # chown homeseer:homeseer /var/lib/dbus && \
+    # chown homeseer:homeseer /var/run/dbus && \
+    # chown homeseer:homeseer /etc/avahi/avahi-daemon.conf && \
+    # chmod u+w /etc /etc/avahi
 
 # Expose ports
 EXPOSE 80 10200 10300 10401 11000
@@ -125,7 +126,12 @@ LABEL org.label-schema.vcs-url="$LABEL_SCHEMA_VCS_URL"
 LABEL org.label-schema.vendor="$LABEL_SCHEMA_VENDOR"
 LABEL org.label-schema.version="$VERSION"
 
+# # Add this near the end of your Dockerfile
+# COPY docker-entrypoint.sh /
+# RUN chmod +x /docker-entrypoint.sh
+
 # Set user and working directory
 USER homeseer
 WORKDIR /homeseer
 ENTRYPOINT ["/usr/local/sbin/homeseer"]
+# ENTRYPOINT ["/docker-entrypoint.sh"]

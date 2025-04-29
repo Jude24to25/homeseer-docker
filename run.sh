@@ -6,7 +6,7 @@
 
 # Load environment variables from .env file if it exists and check if variables are set
 source .env
-./env-check.sh
+./check-env.sh
 
 docker run \
        --interactive \
