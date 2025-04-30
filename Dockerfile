@@ -50,7 +50,7 @@ RUN \
     dpkg-reconfigure --frontend=noninteractive locales && \
     update-locale LANG=$LANG && \
 #   Install container tools
-    apt-get install -y tmux curl wget nano apt-utils net-tools iputils-ping etherwake ssh-client mosquitto-clients dos2unix && \
+    apt-get install -y acl tmux curl wget nano apt-utils net-tools iputils-ping etherwake ssh-client mosquitto-clients dos2unix && \
 #   Install HomeSeer dependencies
     apt-get install -y aha ffmpeg alsa-utils flite chromium avahi-discover libavahi-compat-libdnssd-dev libnss-mdns \
                       avahi-daemon avahi-utils mdns-scan && \
@@ -87,8 +87,7 @@ RUN chmod a+x /scripts/* && \
     ln -sf /scripts/poweroff /usr/local/sbin/poweroff
 
 # Configure timezone NOTE---> ADDED line 90 to address Line 94 onward.... NEED TO ALSO CHECK IF CACHE IS WORKING
-RUN apt-get install -y acl && \
-    if [ ! -e /etc/localtime ]; then \
+RUN if [ ! -e /etc/localtime ]; then \
       ln -sf /usr/share/zoneinfo/UTC /etc/localtime; \
     fi && \
     setfacl -m g:homeseer:rw /var/lib/dbus /var/run/dbus /etc/avahi/avahi-daemon.conf
