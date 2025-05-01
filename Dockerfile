@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.4
 #########################################
 # HOMESEER (V4) LINUX - DOCKERFILE
+# WITH PLUGIN EXTENSIONS FOR Z-WAVE & MATTER
 #########################################
 
 # Base image defined by build arguments
@@ -26,14 +27,16 @@ ARG DEBIAN_FRONTEND
 ENV LANG="$LANG" \
     TZ="$TZ" \
     HOMESEER_CREDENTIALS="" \
-    DEBIAN_FRONTEND="noninteractive"
+    DEBIAN_FRONTEND="noninteractive" \
+    NODE_MAJOR=18 \
+    DOCKER_HOST="tcp://socket-proxy:2375"
 
 # Custom STOP signal
 STOPSIGNAL SIGQUIT
 
 # Docker container image labels (generic ones that don't change often)
 LABEL org.label-schema.schema-version="1.0" \
-      org.label-schema.description="HomeSeer Docker Image"
+      org.label-schema.description="HomeSeer Docker Image with Z-Wave Plus and Matter Controller Support"
 
 # Install dependencies and configure - split into logical, cacheable steps
 # 1. Configure apt repositories
@@ -59,7 +62,7 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
 # 4. Install container tools separately 
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get install -y acl tmux curl wget nano apt-utils net-tools iputils-ping etherwake ssh-client mosquitto-clients dos2unix
+    apt-get install -y acl tmux curl wget nano apt-utils net-tools iputils-ping etherwake ssh-client mosquitto-clients dos2unix sudo
 
 # 5. Install HomeSeer dependencies
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
@@ -82,11 +85,39 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
 # 7. Install additional Mono components
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get install -y mono-vbnc mono-xsp4 && \
-    apt-get clean
+    apt-get install -y mono-vbnc mono-xsp4
+
+# 8. Install Docker CLI (for plugin support) - we'll use the host's Docker daemon via socket-proxy
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release && \
+    mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian buster stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y docker-ce-cli
+
+# 9. Install Node.js 18.x (for Matter Controller plugin)
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get install -y ca-certificates curl gnupg && \
+    mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y nodejs && \
+    npm install -g npm@latest
+
+# Clean up apt cache
+RUN apt-get clean
 
 # Create homeseer user and group with specific IDs
 RUN groupadd -g 1000 homeseer && useradd -u 1000 -g homeseer -m -s /bin/bash homeseer
+
+# Add the homeseer user to the sudo group and configure passwordless sudo
+RUN usermod -aG sudo homeseer && \
+    echo "homeseer ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/homeseer && \
+    chmod 440 /etc/sudoers.d/homeseer
 
 # Copy HomeSeer override and container runtime scripts from base/
 # Separate copy commands for better caching when scripts change
@@ -123,7 +154,7 @@ RUN chmod 664 /etc/avahi/avahi-daemon.conf && \
     chmod 664 /etc/avahi/avahi-daemon.conf.original
 
 # Expose ports
-EXPOSE 80 10200 10300 10401 11000
+EXPOSE 80 10200 10300 10401 11000 8091 3000
 
 # Define volume
 VOLUME ["/homeseer"]
