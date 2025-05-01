@@ -1,40 +1,84 @@
-# --------------------------------------------------
-# HOMESEER LINUX SERVER
-# --------------------------------------------------
-# This container hosts the HomeSeer V4 server.
-# This config will create standalone 'homeseer-data'
-# docker volume to store all homeseer runtime
-# files. (logs, config, backups, app files)
-#
-# Disclaimers:
-# --------------
-# This docker container is not supported, sponsored
-# or directly affiliated with Homeseer
-# (https://homeseer.com).
-#
-# --------------------------------------------------
-#    (Developed with ♥ by SavageSoftware, LLC.)
-# --------------------------------------------------
+version: "3.8"
+
+networks:
+  docker_default:
+    name: docker_default
+    external: true
+  socket_proxy:
+    name: socket_proxy
+    external: true
 
 volumes:
   homeseer-data:
     name: homeseer-data
 
 services:
-  homeseer:
-    container_name: homeseer
-    image: ${IMAGE_OUTPUT}:latest
-    hostname: homeseer
-    restart: unless-stopped
-    network_mode: bridge
-    ports:
-      - 80:80
-      - 10200:10200
-      - 10300:10300
-      - 10401:10401
-      - 11000:11000
+  homeseer-docker:
+    cap_drop:
+      - AUDIT_CONTROL
+      - BLOCK_SUSPEND
+      - DAC_READ_SEARCH
+      - IPC_LOCK
+      - IPC_OWNER
+      - LEASE
+      - LINUX_IMMUTABLE
+      - MAC_ADMIN
+      - MAC_OVERRIDE
+      - NET_ADMIN
+      - NET_BROADCAST
+      - SYSLOG
+      - SYS_ADMIN
+      - SYS_BOOT
+      - SYS_MODULE
+      - SYS_NICE
+      - SYS_PACCT
+      - SYS_PTRACE
+      - SYS_RAWIO
+      - SYS_RESOURCE
+      - SYS_TIME
+      - SYS_TTY_CONFIG
+      - WAKE_ALARM
+    container_name: homeseer-docker
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+    entrypoint:
+      - /usr/local/sbin/homeseer
     environment:
-      TZ: $TZ
-      LANG: $LANG
+      - TZ=America/Los_Angeles
+      - LANG=en_US.UTF-8
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - MONO_VERSION=6.12.0.182
+      - HOMESEER_CREDENTIALS=
+      - DOCKER_HOST=tcp://socket-proxy:2375
+    hostname: homeseer-docker
+    image: homeseer:latest
+    ipc: private
+    labels:
+      org.label-schema.build-date: 2025-04-26T06:07:01Z
+      org.label-schema.description: HomeSeer Docker Image
+      org.label-schema.name: homeseer
+      org.label-schema.schema-version: 1.0
+      org.label-schema.url: https://github.com/XYZ/homeseer-docker
+      org.label-schema.vcs-url: https://github.com/XYZ/homeseer-docker
+      org.label-schema.vendor: XYZ
+      org.label-schema.version: 4.2.22.4
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: 3
+    privileged: true
+    networks:
+      - docker_default
+      - socket_proxy
+    ports:
+      - 80:80/tcp
+      - 10200:10200/tcp
+      - 10300:10300/tcp
+      - 10401:10401/tcp
+      - 11000:11000/tcp
+    restart: always
+    user: homeseer
     volumes:
       - homeseer-data:/homeseer
+    working_dir: /homeseer

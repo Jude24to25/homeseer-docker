@@ -72,11 +72,23 @@ function initialize_homeseer {
       exit 1
   fi
 
-  # Set timezone
-  ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
+  # ----- CHANGES START HERE -----
+  # Set timezone - CHANGED: We now check if we're running as root. If not, we skip
+  # the timezone symlinking and just print a message. This avoids the permission errors.
+  if [ "$(id -u)" -eq 0 ]; then
+    # Running as root - can set timezone system-wide
+    ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
+  else
+    # Running as non-root user - just display the timezone but don't try to modify system files
+    echo "Note: Running as non-root user. Using configured timezone $TZ but not modifying system files."
+    # The actual timezone will still be used by applications even though we can't create the symlink
+  fi
+  # ----- CHANGES END HERE -----
+  
   export LANG="$LANG"
   export TZ="$TZ"
 
+  # Original code (commented out):
   # TZ="${TZ:=America/Los_Angeles}"
   # LANG="${LANG:=en_US.UTF-8}"
   # export LANG=$LANG
@@ -125,19 +137,42 @@ function initialize_homeseer {
   # delete existing pid if found
   [ -e /var/run/avahi-daemon/pid ] && rm -f /var/run/avahi-daemon/pid
 
-  # fix avahi config for synology dsm
+  # ----- CHANGES START HERE -----
+  # fix avahi config for synology dsm - CHANGED: Use /homeseer directory to write configs
+  # and don't try to modify /etc directly. Create a local copy in /homeseer that avahi
+  # will use as a configuration file
+  
+  # Create a local copy of the avahi config to work with
+  cp /etc/avahi/avahi-daemon.conf /homeseer/avahi-daemon.conf || echo "Warning: Could not copy avahi config (continuing anyway)"
+  
   if [ ! -z "$DSM_HOSTNAME" ]; then
-    echo " -> AVAHI configuration file updated for Synology DSM_HOSTNAME: ${DSM_HOSTNAME}"
-    sed "s/.*host-name.*/host-name=${DSM_HOSTNAME}/" /etc/avahi/avahi-daemon.conf > /homeseer/avahi-daemon.conf.tmp && \
-    mv /homeseer/avahi-daemon.conf.tmp /etc/avahi/avahi-daemon.conf
+    echo " -> AVAHI configuration for Synology DSM_HOSTNAME: ${DSM_HOSTNAME}"
+    # Update our local copy - not trying to write back to /etc
+    sed "s/.*host-name.*/host-name=${DSM_HOSTNAME}/" /homeseer/avahi-daemon.conf > /homeseer/avahi-daemon.conf.new
+    mv /homeseer/avahi-daemon.conf.new /homeseer/avahi-daemon.conf
   else
-    sed "s/.*host-name.*/#host-name=/" /etc/avahi/avahi-daemon.conf > /homeseer/avahi-daemon.conf.tmp && \
-    mv /homeseer/avahi-daemon.conf.tmp /etc/avahi/avahi-daemon.conf
+    # Update our local copy - not trying to write back to /etc
+    sed "s/.*host-name.*/#host-name=/" /homeseer/avahi-daemon.conf > /homeseer/avahi-daemon.conf.new
+    mv /homeseer/avahi-daemon.conf.new /homeseer/avahi-daemon.conf
   fi
-  echo " -> AVAHI configuration file updated: /etc/avahi/avahi-daemon.conf"
+  echo " -> Using local AVAHI configuration file: /homeseer/avahi-daemon.conf"
 
-  # launch AVAHI as a background task and redirect STDOUT & STDERR to NULL
-  avahi-daemon --no-chroot -f /etc/avahi/avahi-daemon.conf 2>/dev/null &
+  # launch AVAHI using our local config instead of /etc/avahi/avahi-daemon.conf
+  avahi-daemon --no-chroot -f /homeseer/avahi-daemon.conf 2>/dev/null &
+  # ----- CHANGES END HERE -----
+  
+  # Original code (commented out):
+  # if [ ! -z "$DSM_HOSTNAME" ]; then
+  #   echo " -> AVAHI configuration file updated for Synology DSM_HOSTNAME: ${DSM_HOSTNAME}"
+  #   sed "s/.*host-name.*/host-name=${DSM_HOSTNAME}/" /etc/avahi/avahi-daemon.conf > /homeseer/avahi-daemon.conf.tmp && \
+  #   mv /homeseer/avahi-daemon.conf.tmp /etc/avahi/avahi-daemon.conf
+  # else
+  #   sed "s/.*host-name.*/#host-name=/" /etc/avahi/avahi-daemon.conf > /homeseer/avahi-daemon.conf.tmp && \
+  #   mv /homeseer/avahi-daemon.conf.tmp /etc/avahi/avahi-daemon.conf
+  # fi
+  # echo " -> AVAHI configuration file updated: /etc/avahi/avahi-daemon.conf"
+  # avahi-daemon --no-chroot -f /etc/avahi/avahi-daemon.conf 2>/dev/null &
+  
   AVAHI_PID=$!
   echo " -> AVAHI Daemon started in background (PID=$AVAHI_PID)"
   ps -A | grep avahi-daemon || true

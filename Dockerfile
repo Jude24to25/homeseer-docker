@@ -22,88 +22,105 @@ ARG LABEL_SCHEMA_VCS_URL
 ARG LABEL_SCHEMA_VENDOR
 ARG DEBIAN_FRONTEND
 
+# Early set of environment variables (improves caching)
+ENV LANG="$LANG" \
+    TZ="$TZ" \
+    HOMESEER_CREDENTIALS="" \
+    DEBIAN_FRONTEND="noninteractive"
+
 # Custom STOP signal
 STOPSIGNAL SIGQUIT
 
-# Environment variables
-ENV LANG="$LANG"
-ENV TZ="$TZ"
-ENV HOMESEER_CREDENTIALS=""
+# Docker container image labels (generic ones that don't change often)
+LABEL org.label-schema.schema-version="1.0" \
+      org.label-schema.description="HomeSeer Docker Image"
 
-# Docker container image labels (others moved to end to avoid cache invalidation)
-LABEL org.label-schema.schema-version="1.0"
-LABEL org.label-schema.description="HomeSeer Docker Image"
-
-# Install dependencies and configure
-RUN \
-#   Let Docker cache apt-get downloads    
-    --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+# Install dependencies and configure - split into logical, cacheable steps
+# 1. Configure apt repositories
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-#   Fix Mono repository warning for mono base image
     echo "deb [trusted=yes] https://download.mono-project.com/repo/debian stable-buster/snapshots/6.12.0.182 main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
+    echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+
+# 2. Update system packages - separated from other installs for better caching
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && \
-    apt-get upgrade -y && \
-    echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections && \
-#   Update locale/language
+    apt-get upgrade -y
+
+# 3. Install locales separately since they rarely change
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get install -y locales && \
     sed -i -e "s/# $LANG UTF-8/$LANG UTF-8/" /etc/locale.gen && \
     dpkg-reconfigure --frontend=noninteractive locales && \
-    update-locale LANG=$LANG && \
-#   Install container tools
-    apt-get install -y acl tmux curl wget nano apt-utils net-tools iputils-ping etherwake ssh-client mosquitto-clients dos2unix && \
-#   Install HomeSeer dependencies
+    update-locale LANG=$LANG
+
+# 4. Install container tools separately 
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get install -y acl tmux curl wget nano apt-utils net-tools iputils-ping etherwake ssh-client mosquitto-clients dos2unix
+
+# 5. Install HomeSeer dependencies
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get install -y aha ffmpeg alsa-utils flite chromium avahi-discover libavahi-compat-libdnssd-dev libnss-mdns \
                       avahi-daemon avahi-utils mdns-scan && \
-    apt-get remove -y brltty && \
-#   Install Mono for non-mono base images
+    apt-get remove -y brltty
+
+# 6. Install Mono for non-mono base images - using ARG for conditional execution
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     if [ "$IMAGE_BASE_NAME" != "mono" ]; then \
       apt-get install -y gnupg ca-certificates && \
       gpg --homedir /tmp --no-default-keyring --keyring /usr/share/keyrings/mono-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
       echo "deb [signed-by=/usr/share/keyrings/mono-archive-keyring.gpg] https://download.mono-project.com/repo/debian stable-buster main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
       apt-get update && \
       apt-get install -y mono-complete mono-devel; \
-    fi && \
+    fi
+
+# 7. Install additional Mono components
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get install -y mono-vbnc mono-xsp4 && \
     apt-get clean
 
-# Create homeseer user
+# Create homeseer user and group with specific IDs
 RUN groupadd -g 1000 homeseer && useradd -u 1000 -g homeseer -m -s /bin/bash homeseer
 
 # Copy HomeSeer override and container runtime scripts from base/
+# Separate copy commands for better caching when scripts change
 COPY base/homeseer/*.sh /scripts/
 COPY base/usr/local/sbin/* /scripts/
 
-# Configure scripts
-#   Ensure scripts are executable
+# Configure scripts - this rarely changes so it should be cacheable
 RUN chmod a+x /scripts/* && \
-#   Ensure scripts are line-encoded for unix/linux
     dos2unix /scripts/* && \
-#   Remove "reboot" and "shutdown" binaries from the container (we will replace with symlinks to scripts)
     rm -f /sbin/reboot && rm -f /sbin/shutdown && \
-#   Create symlinks in bin path ("/usr/local/sbin")
     ln -sf /scripts/homeseer /usr/local/sbin/homeseer && \
     ln -sf /scripts/reboot /usr/local/sbin/reboot && \
     ln -sf /scripts/shutdown /usr/local/sbin/shutdown && \
     ln -sf /scripts/poweroff /usr/local/sbin/poweroff
 
-# Configure timezone NOTE---> ADDED line 90 to address Line 94 onward.... NEED TO ALSO CHECK IF CACHE IS WORKING
-RUN if [ ! -e /etc/localtime ]; then \
-      ln -sf /usr/share/zoneinfo/UTC /etc/localtime; \
-    fi && \
-    setfacl -m g:homeseer:rw /var/lib/dbus /var/run/dbus /etc/avahi/avahi-daemon.conf
-    # chown homeseer:homeseer /etc/localtime /etc/timezone && \
-    # chmod u+w /etc /etc/localtime /etc/timezone
-
-# Copy avahi config, then configure DBUS and AVAHI
-COPY base/etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
-RUN mkdir -p /var/lib/dbus /var/run/dbus /var/run/avahi-daemon && \
-    chown messagebus:messagebus /var/run/dbus && \
+# Fix for timezone and permissions - pre-configure timezone
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo $TZ > /etc/timezone && \
+    mkdir -p /var/lib/dbus /var/run/dbus /var/run/avahi-daemon && \
+    # Fix permissions for key directories and files
+    chown -R homeseer:homeseer /var/lib/dbus /var/run/dbus && \
+    chmod 775 /var/lib/dbus /var/run/dbus && \
+    # Set proper permissions for avahi
     chown avahi:avahi /var/run/avahi-daemon && \
-    setfacl -m g:homeseer:rw /var/lib/dbus /var/run/dbus /etc/avahi/avahi-daemon.conf
-    # chown homeseer:homeseer /var/lib/dbus && \
-    # chown homeseer:homeseer /var/run/dbus && \
-    # chown homeseer:homeseer /etc/avahi/avahi-daemon.conf && \
-    # chmod u+w /etc /etc/avahi
+    # Create a copy of avahi config that homeseer user can modify
+    mkdir -p /etc/avahi && \
+    chmod 775 /etc/avahi
+
+# Copy avahi config
+COPY base/etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
+RUN chmod 664 /etc/avahi/avahi-daemon.conf && \
+    # Make an extra copy in a location where homeseer can write
+    cp /etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf.original && \
+    chmod 664 /etc/avahi/avahi-daemon.conf.original
 
 # Expose ports
 EXPOSE 80 10200 10300 10401 11000
@@ -111,26 +128,31 @@ EXPOSE 80 10200 10300 10401 11000
 # Define volume
 VOLUME ["/homeseer"]
 
-# Download HomeSeer
+# Download HomeSeer - last step since this may change frequently
+# Use curl with retry for more reliable downloads
 RUN mkdir -p /homeseer && \
     chown homeseer:homeseer /homeseer && \
-    chmod -R u+rwX /homeseer && \
-    wget -O /homeseer.tar.gz "$HOMESEER_DOWNLOAD_URL"
+    chmod -R 775 /homeseer && \
+    for i in {1..3}; do \
+      echo "Downloading HomeSeer (attempt $i)..." && \
+      if wget -O /homeseer.tar.gz "$HOMESEER_DOWNLOAD_URL"; then \
+        break; \
+      elif [ $i -eq 3 ]; then \
+        echo "Failed to download HomeSeer after 3 attempts"; \
+        exit 1; \
+      fi; \
+      sleep 2; \
+    done
 
 # Docker container image labels (moved to end to avoid cache invalidation)
-LABEL org.label-schema.build-date=$BUILDDATE
-LABEL org.label-schema.name="${IMAGE_OUTPUT}"
-LABEL org.label-schema.url="$LABEL_SCHEMA_URL"
-LABEL org.label-schema.vcs-url="$LABEL_SCHEMA_VCS_URL"
-LABEL org.label-schema.vendor="$LABEL_SCHEMA_VENDOR"
-LABEL org.label-schema.version="$VERSION"
-
-# # Add this near the end of your Dockerfile
-# COPY docker-entrypoint.sh /
-# RUN chmod +x /docker-entrypoint.sh
+LABEL org.label-schema.build-date=$BUILDDATE \
+      org.label-schema.name="${IMAGE_OUTPUT}" \
+      org.label-schema.url="$LABEL_SCHEMA_URL" \
+      org.label-schema.vcs-url="$LABEL_SCHEMA_VCS_URL" \
+      org.label-schema.vendor="$LABEL_SCHEMA_VENDOR" \
+      org.label-schema.version="$VERSION"
 
 # Set user and working directory
 USER homeseer
 WORKDIR /homeseer
 ENTRYPOINT ["/usr/local/sbin/homeseer"]
-# ENTRYPOINT ["/docker-entrypoint.sh"]

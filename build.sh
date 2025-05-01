@@ -7,17 +7,7 @@
 #-----------------------------------------------------------------------------------------
 # !! THIS DOCKER BUILD REQUIRES THE DOCKER BUILDX PLUGIN !!
 #-----------------------------------------------------------------------------------------
-#
-# REF: https://docs.docker.com/buildx/working-with-buildx/
-#
-# Docker Buildx is a CLI plugin that extends the docker command with the
-# full support of the features provided by Moby BuildKit builder toolkit.
-# It provides the same user experience as docker build with many new
-# features like creating scoped builder instances and building against
-# multiple nodes concurrently.
-#
-# Ensure Buildx is installed and configured (included in Docker Desktop and CLI).#
-#-----------------------------------------------------------------------------------------
+#  ./build.sh 2>&1 | tee debug.log
 
 echo
 echo "**********************************************************************"
@@ -46,35 +36,74 @@ echo "  "
 # Warn about multi-platform builds with --load
 if echo "$BUILD_PLATFORMS" | grep -q ',' && [ "${PUSH_TO_REGISTRY:-false}" != "true" ]; then
   echo "Warning: Multi-platform builds ($BUILD_PLATFORMS) require --push to a registry. Using --load for single platform only."
+  # Use only the first platform when using --load
+  if [ "${PUSH_TO_REGISTRY:-false}" != "true" ]; then
+    BUILD_PLATFORMS=$(echo "$BUILD_PLATFORMS" | cut -d ',' -f 1)
+    echo "Using only $BUILD_PLATFORMS for local build"
+  fi
 fi
-
-#-----------------------------------------------------------------------------------------
-# # Perform multi-arch platform image builds
-# # Set up Buildx for multi-platform builds
-# echo "Setting up Docker Buildx for platform: $BUILD_PLATFORMS"
-# docker buildx create --use --name homeseer-builder --platform $BUILD_PLATFORMS
-
-# # Ensure Buildx builder is cleaned up on exit
-# trap 'docker buildx rm homeseer-builder 2>/dev/null || true' EXIT
 
 # Create a persistent buildx builder if it doesn't exist
 if ! docker buildx inspect homeseer-builder &>/dev/null; then
   echo "Creating persistent buildx builder..."
-  docker buildx create --name homeseer-builder --use
+  docker buildx create --name homeseer-builder --use --driver docker-container --driver-opt network=host
 else
   echo "Using existing buildx builder..."
   docker buildx use homeseer-builder
 fi
 
-# Add these cache-specific flags
-CACHE_FLAGS=" --cache-to=type=local,dest=./docker-cache,mode=max"
+# Initialize buildx for the target platforms
+docker buildx inspect --bootstrap
+
+# Set up cache configuration
+CACHE_DIR="./docker-cache"
+mkdir -p "$CACHE_DIR"
+
+# Add these cache-specific flags - separate from and to caches
+CACHE_FROM="--cache-from=type=local,src=$CACHE_DIR"
+CACHE_TO="--cache-to=type=local,dest=$CACHE_DIR,mode=max"
+
+# For better caching on minor changes, set a consistent build timestamp
+BUILD_TIMESTAMP="$(date -u +'%Y-%m-%dT00:00:00Z')"
+
+# Use BuildKit inline cache feature
+INLINE_CACHE="--build-arg BUILDKIT_INLINE_CACHE=1"
+
+# If we're pushing to a registry, enable registry caching
+if [ "${PUSH_TO_REGISTRY:-false}" = "true" ]; then
+  echo "Enabling registry caching for remote builds"
+  REGISTRY_CACHE="--cache-from=type=registry,ref=${IMAGE_OUTPUT}:buildcache --cache-to=type=registry,ref=${IMAGE_OUTPUT}:buildcache,mode=max"
+fi
+
+# Determine whether to use --load or --push
+if [ "${PUSH_TO_REGISTRY:-false}" = "true" ]; then
+  OUTPUT_FLAG="--push"
+  echo "Building for registry push"
+else
+  OUTPUT_FLAG="--load"
+  echo "Building for local use (--load)"
+fi
+
+# Display buildx info
+echo "Using buildx builder with capabilities:"
+docker buildx inspect
 
 #-----------------------------------------------------------------------------------------
 # Build HomeSeer image
 echo "Building HomeSeer image: ${IMAGE_OUTPUT}:$VERSION"
+echo "Using platforms: $BUILD_PLATFORMS"
+echo "Cache directory: $CACHE_DIR"
+
+# Use --progress=plain during development, auto for production
+PROGRESS="--progress=plain"
+
+# Build the image
 docker buildx build \
-  --progress=plain \
-  $CACHE_FLAGS \
+  $PROGRESS \
+  $CACHE_FROM \
+  $CACHE_TO \
+  $REGISTRY_CACHE \
+  $INLINE_CACHE \
   --build-arg IMAGE_BASE_NAME="${IMAGE_BASE_NAME}" \
   --build-arg IMAGE_BASE_TAG="${IMAGE_BASE_TAG}" \
   --build-arg IMAGE_OUTPUT="${IMAGE_OUTPUT}" \
@@ -82,7 +111,7 @@ docker buildx build \
   --build-arg TZ="$TZ" \
   --build-arg LANG="$LANG" \
   --build-arg VERSION="$VERSION" \
-  --build-arg BUILDDATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+  --build-arg BUILDDATE="$BUILD_TIMESTAMP" \
   --build-arg LABEL_SCHEMA_URL="$LABEL_SCHEMA_URL" \
   --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
   --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
@@ -91,13 +120,13 @@ docker buildx build \
   --tag "${IMAGE_OUTPUT}:$VERSION" \
   --platform "$BUILD_PLATFORMS" \
   --file Dockerfile \
-  --load \
+  $OUTPUT_FLAG \
   . || {
     echo "Warning: Build failed, checking for images anyway..."
     docker images | grep "${IMAGE_OUTPUT}" || echo "No images found for ${IMAGE_OUTPUT}"
     exit 1
   }
 
-docker images | grep "${IMAGE_OUTPUT}"
-
-#   --cache-from=type=local,src="${IMAGE_OUTPUT}:latest" \
+# Show the built images
+echo "Build completed. Available images:"
+docker images | grep "${IMAGE_OUTPUT}" || echo "No images found for ${IMAGE_OUTPUT}"
