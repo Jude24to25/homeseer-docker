@@ -14,6 +14,7 @@ ARG IMAGE_BASE_NAME
 ARG IMAGE_BASE_TAG
 ARG IMAGE_OUTPUT
 ARG HOMESEER_DOWNLOAD_URL
+ARG NODEJS_VERSION=18
 ARG TZ
 ARG LANG
 ARG VERSION
@@ -28,7 +29,6 @@ ENV LANG="$LANG" \
     TZ="$TZ" \
     HOMESEER_CREDENTIALS="" \
     DEBIAN_FRONTEND="noninteractive" \
-    NODE_MAJOR=18 \
     DOCKER_HOST="tcp://socket-proxy:2375"
 
 # Custom STOP signal
@@ -63,7 +63,7 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get install -y acl tmux curl wget nano apt-utils net-tools iputils-ping etherwake ssh-client mosquitto-clients dos2unix \
-                      sudo unzip
+                      unzip
 
 # 5. Install HomeSeer dependencies
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
@@ -97,6 +97,23 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian buster stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
     apt-get update && \
     apt-get install -y docker-ce-cli
+
+# 9. Install specific Node.js version for HomeSeer Matter Controller plugin
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get install -y ca-certificates curl gnupg && \
+    mkdir -p /etc/apt/keyrings && \
+    # Download and set up Node.js repository for specified version
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODEJS_VERSION}.x nodistro main" > /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update && \
+    # Install Node.js with additional build dependencies needed for native modules
+    apt-get install -y nodejs make g++ gcc && \
+    # Verify installed version
+    node --version && \
+    npm --version && \
+    # Install additional global packages required for Matter
+    npm install -g node-gyp
 
 # Clean up apt cache
 RUN apt-get clean

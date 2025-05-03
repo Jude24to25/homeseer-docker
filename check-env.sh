@@ -51,11 +51,21 @@ if ! [ -f "/usr/share/zoneinfo/$TZ" ] && ! [ -d "/usr/share/zoneinfo/$TZ" ]; the
   exit 1
 fi
 
+# Validate NODEJS_VERSION (if set)
+if [ ! -z "$NODEJS_VERSION" ] && ! echo "$NODEJS_VERSION" | grep -Eq '^[0-9]+$'; then
+  echo "Error: NODEJS_VERSION must be a positive integer (e.g., 18, 20)."
+  exit 1
+fi
+
+# Set default for NODEJS_VERSION if not provided
+NODEJS_VERSION="${NODEJS_VERSION:-18}"
+
 echo "ENVIRONMENT VARIABLES"
 echo "HomeSeer URL:  $HOMESEER_DOWNLOAD_URL"
+echo "Node.js:       Version ${NODEJS_VERSION}"
 echo "Base Image:    $IMAGE_BASE_NAME:$IMAGE_BASE_TAG"
+echo "Platform(s):   $BUILD_PLATFORMS"
 echo "Output Image:  $IMAGE_OUTPUT"
 echo "Timezone:      $TZ"
 echo "Language:      $LANG"
-echo "Platform(s):   $BUILD_PLATFORMS"
 echo "  "
