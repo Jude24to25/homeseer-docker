@@ -51,19 +51,26 @@ if ! [ -f "/usr/share/zoneinfo/$TZ" ] && ! [ -d "/usr/share/zoneinfo/$TZ" ]; the
   exit 1
 fi
 
-# Validate NODEJS_VERSION (if set)
-if [ ! -z "$NODEJS_VERSION" ] && ! echo "$NODEJS_VERSION" | grep -Eq '^[0-9]+$'; then
-  echo "Error: NODEJS_VERSION must be a positive integer (e.g., 18, 20)."
+# Validate NODEJS_VERSION
+if [ -z "$NODEJS_VERSION" ]; then
+  echo "Error: NODEJS_VERSION must not be blank."
+  exit 1
+elif [ "$NODEJS_VERSION" != "latest" ] && ! echo "$NODEJS_VERSION" | grep -Eq '^[0-9]+$'; then
+  echo "Error: NODEJS_VERSION must be a positive integer (e.g., 18, 20) or 'latest'."
+  exit 1
+elif [ "$NODEJS_VERSION" != "latest" ] && [ "$NODEJS_VERSION" -lt 18 ]; then
+  echo "Error: NODEJS_VERSION must be an integer >= 18 or 'latest'."
   exit 1
 fi
 
-# Set default for NODEJS_VERSION if not provided
-NODEJS_VERSION="${NODEJS_VERSION:-18}"
-
 echo "ENVIRONMENT VARIABLES"
 echo "HomeSeer URL:  $HOMESEER_DOWNLOAD_URL"
-echo "Node.js:       Version ${NODEJS_VERSION}"
 echo "Base Image:    $IMAGE_BASE_NAME:$IMAGE_BASE_TAG"
+if [ -z "$NODEJS_VERSION" ]; then echo \
+     "Node.js:       Default version for base image"
+else echo \
+      "Node.js:       Version ${NODEJS_VERSION}"
+fi
 echo "Platform(s):   $BUILD_PLATFORMS"
 echo "Output Image:  $IMAGE_OUTPUT"
 echo "Timezone:      $TZ"

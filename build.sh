@@ -108,7 +108,7 @@ docker buildx build \
   --build-arg IMAGE_BASE_TAG="${IMAGE_BASE_TAG}" \
   --build-arg IMAGE_OUTPUT="${IMAGE_OUTPUT}" \
   --build-arg HOMESEER_DOWNLOAD_URL="$HOMESEER_DOWNLOAD_URL" \
-  --build-arg NODEJS_VERSION="${NODEJS_VERSION:-18}" \
+  --build-arg NODEJS_VERSION="${NODEJS_VERSION}" \
   --build-arg TZ="$TZ" \
   --build-arg LANG="$LANG" \
   --build-arg VERSION="$VERSION" \
@@ -118,7 +118,8 @@ docker buildx build \
   --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
   --build-arg DEBIAN_FRONTEND="noninteractive" \
   --tag "${IMAGE_OUTPUT}:latest" \
-  --tag "${IMAGE_OUTPUT}:$VERSION" \
+  --tag "${IMAGE_OUTPUT}:$VERSION-${IMAGE_BASE_NAME}" \
+  --tag "${IMAGE_OUTPUT}:${IMAGE_BASE_NAME}-${IMAGE_BASE_TAG}" \
   --platform "$BUILD_PLATFORMS" \
   --file Dockerfile \
   $OUTPUT_FLAG \

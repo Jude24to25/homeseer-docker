@@ -9,12 +9,12 @@ ARG IMAGE_BASE_NAME
 ARG IMAGE_BASE_TAG
 FROM ${IMAGE_BASE_NAME}:${IMAGE_BASE_TAG}
 
-# Build arguments
+# Build arguments - define all ARGs early to improve caching
 ARG IMAGE_BASE_NAME
 ARG IMAGE_BASE_TAG
 ARG IMAGE_OUTPUT
 ARG HOMESEER_DOWNLOAD_URL
-ARG NODEJS_VERSION=18
+ARG NODEJS_VERSION
 ARG TZ
 ARG LANG
 ARG VERSION
@@ -23,6 +23,8 @@ ARG LABEL_SCHEMA_URL
 ARG LABEL_SCHEMA_VCS_URL
 ARG LABEL_SCHEMA_VENDOR
 ARG DEBIAN_FRONTEND
+ARG HOMESEER_UID=8675
+ARG HOMESEER_GID=8675
 
 # Early set of environment variables (improves caching)
 ENV LANG="$LANG" \
@@ -38,11 +40,12 @@ STOPSIGNAL SIGQUIT
 LABEL org.label-schema.schema-version="1.0" \
       org.label-schema.description="HomeSeer Docker Image with Z-Wave Plus and Matter Controller Support"
 
-# Install dependencies and configure - split into logical, cacheable steps
-# 1. Configure apt repositories
+# Define volume
+VOLUME ["/homeseer"]
+
+# 1. Configure debconf settings (removed unnecessary mono repository)
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    echo "deb [trusted=yes] https://download.mono-project.com/repo/debian stable-buster/snapshots/6.12.0.182 main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
     echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 
 # 2. Update system packages - separated from other installs for better caching
@@ -59,11 +62,11 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     dpkg-reconfigure --frontend=noninteractive locales && \
     update-locale LANG=$LANG
 
-# 4. Install container tools separately 
+# 4. Install container tools and sudo separately
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get install -y acl tmux curl wget nano apt-utils net-tools iputils-ping etherwake ssh-client mosquitto-clients dos2unix \
-                      unzip
+                      unzip sudo python3
 
 # 5. Install HomeSeer dependencies
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
@@ -75,12 +78,27 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
 # 6. Install Mono for non-mono base images - using ARG for conditional execution
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    if [ "$IMAGE_BASE_NAME" != "mono" ]; then \
-      apt-get install -y gnupg ca-certificates && \
-      gpg --homedir /tmp --no-default-keyring --keyring /usr/share/keyrings/mono-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
-      echo "deb [signed-by=/usr/share/keyrings/mono-archive-keyring.gpg] https://download.mono-project.com/repo/debian stable-buster main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
-      apt-get update && \
-      apt-get install -y mono-complete mono-devel; \
+    if [ "$IMAGE_BASE_NAME" = "ubuntu" ]; then \
+    # For Ubuntu 24.04, use the jammy repository as it's the most recent supported
+        apt-get install -y gnupg ca-certificates && \
+        gpg --homedir /tmp --no-default-keyring --keyring /usr/share/keyrings/mono-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
+        echo "deb [signed-by=/usr/share/keyrings/mono-archive-keyring.gpg] https://download.mono-project.com/repo/ubuntu stable-focal main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
+        apt-get update && \
+        apt-get install -y mono-complete mono-devel; \
+    elif [ "$IMAGE_BASE_NAME" = "debian" ]; then \
+    # For Debian 12 (Bookworm), use the most appropriate repo
+        apt-get install -y gnupg ca-certificates && \
+        gpg --homedir /tmp --no-default-keyring --keyring /usr/share/keyrings/mono-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
+        echo "deb [signed-by=/usr/share/keyrings/mono-archive-keyring.gpg] https://download.mono-project.com/repo/debian stable-focal main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
+        apt-get update && \
+        apt-get install -y mono-complete mono-devel; \
+    elif [ "$IMAGE_BASE_NAME" != "mono" ]; then \
+    # For any other base image (that isn't mono), make a best guess based on /etc/os-release
+        apt-get install -y gnupg ca-certificates && \
+        gpg --homedir /tmp --no-default-keyring --keyring /usr/share/keyrings/mono-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
+        echo "deb [signed-by=/usr/share/keyrings/mono-archive-keyring.gpg] https://download.mono-project.com/repo/debian stable-focal main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
+        apt-get update && \
+        apt-get install -y mono-complete mono-devel; \
     fi
 
 # 7. Install additional Mono components
@@ -93,9 +111,24 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release && \
     mkdir -p /etc/apt/keyrings && \
-    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian buster stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
-    apt-get update && \
+    if [ "$IMAGE_BASE_NAME" = "mono" ]; then \
+        curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian buster stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+        apt-get update; \
+    elif [ "$IMAGE_BASE_NAME" != "mono" ]; then \
+        # Detect distribution and codename
+        . /etc/os-release && \
+        if [ "$ID" = "ubuntu" ]; then \
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $VERSION_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null; \
+        elif [ "$ID" = "debian" ]; then \
+            curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $VERSION_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null; \
+        else \
+            echo "Error: Unsupported distribution '$ID' for Docker repository setup" && exit 1; \
+        fi && \
+        apt-get update; \
+    fi && \
     apt-get install -y docker-ce-cli
 
 # 9. Install specific Node.js version for HomeSeer Matter Controller plugin
@@ -104,8 +137,12 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     apt-get install -y ca-certificates curl gnupg && \
     mkdir -p /etc/apt/keyrings && \
     # Download and set up Node.js repository for specified version
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODEJS_VERSION}.x nodistro main" > /etc/apt/sources.list.d/nodesource.list && \
+    if [ ! -z "$NODEJS_VERSION" ] && [ "$NODEJS_VERSION" != "latest" ]; then \
+        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+        echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODEJS_VERSION}.x nodistro main" > /etc/apt/sources.list.d/nodesource.list; \
+    elif [ "$NODEJS_VERSION" = "latest" ]; then \
+        curl -fsSL https://deb.nodesource.com/setup_current.x | bash -; \
+    fi && \
     apt-get update && \
     # Install Node.js with additional build dependencies needed for native modules
     apt-get install -y nodejs make g++ gcc && \
@@ -118,8 +155,37 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
 # Clean up apt cache
 RUN apt-get clean
 
+# Expose ports - these rarely change
+EXPOSE 80 10200 10300 10401 11000 8091 3000 5580
+
 # Create homeseer user and group with specific IDs
-RUN groupadd -g 1000 homeseer && useradd -u 1000 -g homeseer -m -s /bin/bash homeseer
+RUN groupadd -g ${HOMESEER_GID} homeseer && useradd -u ${HOMESEER_UID} -g homeseer -m -s /bin/bash homeseer && \
+    # Configure sudo to allow homeseer user to use sudo without password
+    echo "homeseer ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+    # Create homeseer directory - do this before download for better caching
+    mkdir -p /homeseer && \
+    chown homeseer:homeseer /homeseer && \
+    chmod -R 775 /homeseer
+
+# Fix for timezone and permissions - pre-configure timezone
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo $TZ > /etc/timezone && \
+    mkdir -p /var/lib/dbus /var/run/dbus /var/run/avahi-daemon && \
+    # Fix permissions for key directories and files
+    chown -R homeseer:homeseer /var/lib/dbus /var/run/dbus && \
+    chmod 775 /var/lib/dbus /var/run/dbus && \
+    # Set proper permissions for avahi
+    chown avahi:avahi /var/run/avahi-daemon && \
+    # Create a copy of avahi config that homeseer user can modify
+    mkdir -p /etc/avahi && \
+    chmod 775 /etc/avahi
+
+# Copy avahi config - files rarely change
+COPY base/etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
+RUN chmod 664 /etc/avahi/avahi-daemon.conf && \
+    # Make an extra copy in a location where homeseer can write
+    cp /etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf.original && \
+    chmod 664 /etc/avahi/avahi-daemon.conf.original
 
 # Copy HomeSeer override and container runtime scripts from base/
 # Separate copy commands for better caching when scripts change
@@ -135,38 +201,9 @@ RUN chmod a+x /scripts/* && \
     ln -sf /scripts/shutdown /usr/local/sbin/shutdown && \
     ln -sf /scripts/poweroff /usr/local/sbin/poweroff
 
-# Fix for timezone and permissions - pre-configure timezone
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
-    echo $TZ > /etc/timezone && \
-    mkdir -p /var/lib/dbus /var/run/dbus /var/run/avahi-daemon && \
-    # Fix permissions for key directories and files
-    chown -R homeseer:homeseer /var/lib/dbus /var/run/dbus && \
-    chmod 775 /var/lib/dbus /var/run/dbus && \
-    # Set proper permissions for avahi
-    chown avahi:avahi /var/run/avahi-daemon && \
-    # Create a copy of avahi config that homeseer user can modify
-    mkdir -p /etc/avahi && \
-    chmod 775 /etc/avahi
-
-# Copy avahi config
-COPY base/etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf
-RUN chmod 664 /etc/avahi/avahi-daemon.conf && \
-    # Make an extra copy in a location where homeseer can write
-    cp /etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf.original && \
-    chmod 664 /etc/avahi/avahi-daemon.conf.original
-
-# Expose ports
-EXPOSE 80 10200 10300 10401 11000 8091 3000
-
-# Define volume
-VOLUME ["/homeseer"]
-
 # Download HomeSeer - last step since this may change frequently
-# Use curl with retry for more reliable downloads
-RUN mkdir -p /homeseer && \
-    chown homeseer:homeseer /homeseer && \
-    chmod -R 775 /homeseer && \
-    for i in {1..3}; do \
+# Use wget with retry for more reliable downloads
+RUN for i in {1..3}; do \
       echo "Downloading HomeSeer (attempt $i)..." && \
       if wget -O /homeseer.tar.gz "$HOMESEER_DOWNLOAD_URL"; then \
         break; \
@@ -177,7 +214,7 @@ RUN mkdir -p /homeseer && \
       sleep 2; \
     done
 
-# Docker container image labels (moved to end to avoid cache invalidation)
+# Docker container image labels with variable values - moved to end to avoid cache invalidation
 LABEL org.label-schema.build-date=$BUILDDATE \
       org.label-schema.name="${IMAGE_OUTPUT}" \
       org.label-schema.url="$LABEL_SCHEMA_URL" \
