@@ -109,6 +109,8 @@ docker buildx build \
   --build-arg IMAGE_OUTPUT="${IMAGE_OUTPUT}" \
   --build-arg HOMESEER_DOWNLOAD_URL="$HOMESEER_DOWNLOAD_URL" \
   --build-arg NODEJS_VERSION="${NODEJS_VERSION}" \
+  --build-arg HOMESEER_UID="${HOMESEER_UID}" \
+  --build-arg HOMESEER_GID="${HOMESEER_GID}" \
   --build-arg TZ="$TZ" \
   --build-arg LANG="$LANG" \
   --build-arg VERSION="$VERSION" \

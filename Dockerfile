@@ -15,6 +15,8 @@ ARG IMAGE_BASE_TAG
 ARG IMAGE_OUTPUT
 ARG HOMESEER_DOWNLOAD_URL
 ARG NODEJS_VERSION
+ARG HOMESEER_UID
+ARG HOMESEER_GID
 ARG TZ
 ARG LANG
 ARG VERSION
@@ -23,8 +25,6 @@ ARG LABEL_SCHEMA_URL
 ARG LABEL_SCHEMA_VCS_URL
 ARG LABEL_SCHEMA_VENDOR
 ARG DEBIAN_FRONTEND
-ARG HOMESEER_UID=8675
-ARG HOMESEER_GID=8675
 
 # Early set of environment variables (improves caching)
 ENV LANG="$LANG" \
@@ -131,32 +131,37 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     fi && \
     apt-get install -y docker-ce-cli
 
-# 9. Install specific Node.js version for HomeSeer Matter Controller plugin
-RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get install -y ca-certificates curl gnupg && \
-    mkdir -p /etc/apt/keyrings && \
-    # Download and set up Node.js repository for specified version
-    if [ ! -z "$NODEJS_VERSION" ] && [ "$NODEJS_VERSION" != "latest" ]; then \
-        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-        echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODEJS_VERSION}.x nodistro main" > /etc/apt/sources.list.d/nodesource.list; \
-    elif [ "$NODEJS_VERSION" = "latest" ]; then \
-        curl -fsSL https://deb.nodesource.com/setup_current.x | bash -; \
-    fi && \
-    apt-get update && \
-    # Install Node.js with additional build dependencies needed for native modules
-    apt-get install -y nodejs make g++ gcc && \
-    # Verify installed version
-    node --version && \
-    npm --version && \
-    # Install additional global packages required for Matter
-    npm install -g node-gyp
+# # 9. Install specific Node.js version for HomeSeer Matter Controller plugin
+# RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+#     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+#     apt-get install -y ca-certificates curl gnupg && \
+#     mkdir -p /etc/apt/keyrings && \
+#     # Download and set up Node.js repository for specified version
+#     if [ ! -z "$NODEJS_VERSION" ] && [ "$NODEJS_VERSION" != "latest" ]; then \
+#         curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+#         echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODEJS_VERSION}.x nodistro main" > /etc/apt/sources.list.d/nodesource.list; \
+#     elif [ "$NODEJS_VERSION" = "latest" ]; then \
+#         curl -fsSL https://deb.nodesource.com/setup_current.x | bash -; \
+#     fi && \
+#     apt-get update && \
+#     # Install Matter dependencies
+#     apt-get install -y bluetooth bluez libbluetooth-dev libudev-dev && \
+#     # Install Node.js with additional build dependencies needed for native modules
+#     apt-get install -y nodejs make g++ gcc && \
+#     # Allow Node.js directly access Bluetooth hardware when needed
+#     setcap cap_net_raw+eip $(eval readlink -f `which node`) && \
+#     # Verify installed version
+#     node --version && \
+#     npm --version && \
+#     # Install additional global packages required for Matter
+#     npm install -g node-gyp
+#     Create wrapper scripts for node and npm
 
 # Clean up apt cache
 RUN apt-get clean
 
 # Expose ports - these rarely change
-EXPOSE 80 10200 10300 10401 11000 8091 3000 5580
+EXPOSE 80 10200 10300 10401 11000
 
 # Create homeseer user and group with specific IDs
 RUN groupadd -g ${HOMESEER_GID} homeseer && useradd -u ${HOMESEER_UID} -g homeseer -m -s /bin/bash homeseer && \
@@ -164,8 +169,8 @@ RUN groupadd -g ${HOMESEER_GID} homeseer && useradd -u ${HOMESEER_UID} -g homese
     echo "homeseer ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
     # Create homeseer directory - do this before download for better caching
     mkdir -p /homeseer && \
-    chown homeseer:homeseer /homeseer && \
-    chmod -R 775 /homeseer
+    chown -R ${HOMESEER_UID}:${HOMESEER_GID} /homeseer && \
+    chmod -R 775 /homeseer && chmod -R g+s /homeseer
 
 # Fix for timezone and permissions - pre-configure timezone
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
@@ -212,7 +217,8 @@ RUN for i in {1..3}; do \
         exit 1; \
       fi; \
       sleep 2; \
-    done
+    done && \
+    chown -R ${HOMESEER_UID}:${HOMESEER_GID} /homeseer && chmod -R 775 /homeseer && chmod -R g+s /homeseer && setfacl -R -b -k /homeseer
 
 # Docker container image labels with variable values - moved to end to avoid cache invalidation
 LABEL org.label-schema.build-date=$BUILDDATE \

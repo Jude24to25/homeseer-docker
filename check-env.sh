@@ -9,21 +9,12 @@ source .env
 # Check if all required variables are set
 if [ -z "$HOMESEER_DOWNLOAD_URL" ] || [ -z "$BUILD_PLATFORMS" ] || \
    [ -z "$IMAGE_BASE_NAME" ] || [ -z "$IMAGE_BASE_TAG" ] || [ -z "$IMAGE_OUTPUT" ] || \
+   [ -z "$NODEJS_VERSION" ] || [ -z "$HOMESEER_UID" ] || [ -z "$HOMESEER_GID" ] || \
    [ -z "$LABEL_SCHEMA_URL" ] || [ -z "$LABEL_SCHEMA_VCS_URL" ] || [ -z "$LABEL_SCHEMA_VENDOR" ] || \
    [ -z "$LANG" ] || [ -z "$TZ" ]; then
   echo "Error: One or more required environment variables are not set in .env."
-  echo "Please define the following in .env:"
-  echo "  HOMESEER_DOWNLOAD_URL (e.g., https://homeseer.com/updates4/linux_4_2_22_4.tar.gz)"
-  echo "  IMAGE_BASE_NAME (e.g., mono, ubuntu)"
-  echo "  IMAGE_BASE_TAG (e.g., 6.12.0, plucky)"
-  echo "  IMAGE_OUTPUT (e.g., localhost/homeseer)"
-  echo "  BUILD_PLATFORMS (e.g., linux/arm64)"
-  echo "  LABEL_SCHEMA_URL (e.g., https://github.com/Jude24to25/homeseer-docker)"
-  echo "  LABEL_SCHEMA_VCS_URL (e.g., https://github.com/Jude24to25/homeseer-docker)"
-  echo "  LABEL_SCHEMA_VENDOR (e.g., Jude24to25)"
-  echo "  LANG (e.g., en_US.UTF-8)"
-  echo "  TZ (e.g., America/Los_Angeles)"
-  echo "  "
+  echo "Please check the following and define any missing variables in .env:"
+  ./display-env.sh
   exit 1
 fi
 
@@ -63,16 +54,4 @@ elif [ "$NODEJS_VERSION" != "latest" ] && [ "$NODEJS_VERSION" -lt 18 ]; then
   exit 1
 fi
 
-echo "ENVIRONMENT VARIABLES"
-echo "HomeSeer URL:  $HOMESEER_DOWNLOAD_URL"
-echo "Base Image:    $IMAGE_BASE_NAME:$IMAGE_BASE_TAG"
-if [ -z "$NODEJS_VERSION" ]; then echo \
-     "Node.js:       Default version for base image"
-else echo \
-      "Node.js:       Version ${NODEJS_VERSION}"
-fi
-echo "Platform(s):   $BUILD_PLATFORMS"
-echo "Output Image:  $IMAGE_OUTPUT"
-echo "Timezone:      $TZ"
-echo "Language:      $LANG"
-echo "  "
+./display-env.sh

@@ -49,3 +49,4 @@ out/
 debug.log
 /docker-cache
 /archive
+.todo
