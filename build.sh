@@ -5,26 +5,9 @@
 ############################################
 
 #-----------------------------------------------------------------------------------------
-# !! THIS DOCKER BUILD REQUIRES THE EXPERIMENTAL DOCKER BUILDX PLUGIN !!
+# !! THIS DOCKER BUILD REQUIRES THE DOCKER BUILDX PLUGIN !!
 #-----------------------------------------------------------------------------------------
-#
-# REF: https://docs.docker.com/buildx/working-with-buildx/
-#
-# Docker Buildx is a CLI plugin that extends the docker command with the
-# full support of the features provided by Moby BuildKit builder toolkit.
-# It provides the same user experience as docker build with many new
-# features like creating scoped builder instances and building against
-# multiple nodes concurrently.
-#
-# This is an experimental feature.
-#
-# Experimental features provide early access to future product functionality.
-# These features are intended for testing and feedback only as they may change
-# between releases without warning or can be removed entirely from a future
-# release. Experimental features must not be used in production environments.
-# Docker does not offer support for experimental features.
-#
-#-----------------------------------------------------------------------------------------
+#  ./build.sh 2>&1 | tee debug.log
 
 echo
 echo "**********************************************************************"
@@ -32,93 +15,122 @@ echo "* BUILDING HOMESEER LINUX DOCKER IMAGE                               *"
 echo "**********************************************************************"
 echo
 
-# use buildx to create a new builder instance; if needed
-docker buildx create --driver-opt env.BUILDKIT_STEP_LOG_MAX_SIZE=10485760   \
-                     --driver-opt env.BUILDKIT_STEP_LOG_MAX_SPEED=100000000 \
-                     --use --name homseer-builder || true;
+# Ensure DOCKER_HOST is set for socket-proxy
+if [ -z "$DOCKER_HOST" ]; then
+  export DOCKER_HOST=tcp://socket-proxy:2375
+fi
 
-build () {
-  # extract function argument values
-  VERSION=$1
-  DOWNLOAD=$2
-  TAGS=$3
-  ARGS=$4
+# Load environment variables from .env file if it exists and check if variables are set
+source .env
+./check-env.sh
 
-  # perform multi-arch platform image builds; push the resulting image to the HomeSeer.sh DockerHub repository
-  # (https://hub.docker.com/r/homeseer/homeseer)
-  docker buildx build \
-    --build-arg BUILDDATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-    --build-arg VERSION="$VERSION"     \
-    --build-arg DOWNLOAD="$DOWNLOAD"   \
-    --platform linux/amd64,linux/arm64 \
-    --tag homeseer/homeseer:$VERSION   \
-    $TAGS . $ARGS
-}
+# Extract version from HOMESEER_DOWNLOAD_URL
+VERSION=$(basename "$HOMESEER_DOWNLOAD_URL" | sed -n 's/.*linux_\([0-9]_[0-9]_[0-9]\{1,\}_[0-9]\).*/\1/p' | tr '_' '.')
+if [ -z "$VERSION" ]; then
+  echo "Error: Could not extract version from HOMESEER_DOWNLOAD_URL."
+  exit 1
+fi
+echo "HS Version:    $VERSION"
+echo "  "
 
-# previous builds (in order oldest .. latest)
-#build "4.1.2"    "https://homeseer.sh/download/archive/release/linux_4_1_2_0.tar.gz" ""  $@
-#build "4.1.3"    "https://homeseer.sh/download/archive/release/linux_4_1_3_0.tar.gz" ""  $@
-#build "4.1.4"    "https://homeseer.sh/download/archive/release/linux_4_1_4_0.tar.gz" ""  $@
-#build "4.1.5"    "https://homeseer.sh/download/archive/release/linux_4_1_5_0.tar.gz" ""  $@
-#build "4.1.6"    "https://homeseer.sh/download/archive/release/linux_4_1_6_0.tar.gz" ""  $@
-#build "4.1.7"    "https://homeseer.sh/download/archive/beta/linux_4_1_7_0.tar.gz" ""     $@
-#build "4.1.8"    "https://homeseer.sh/download/archive/beta/linux_4_1_8_0.tar.gz" ""     $@
-#build "4.1.9"    "https://homeseer.sh/download/archive/beta/linux_4_1_9_0.tar.gz" ""     $@
-#build "4.1.11"   "https://homeseer.sh/download/archive/release/linux_4_1_11_0.tar.gz" "" $@
-#build "4.1.12"   "https://homeseer.sh/download/archive/release/linux_4_1_12_0.tar.gz" "" $@
-#build "4.1.13"   "https://homeseer.sh/download/archive/release/linux_4_1_13_0.tar.gz" "" $@
-#build "4.1.14"   "https://homeseer.sh/download/archive/release/linux_4_1_14_0.tar.gz" "" $@
-#build "4.1.15"   "https://homeseer.sh/download/archive/release/linux_4_1_15_0.tar.gz" "" $@
-#build "4.1.16"   "https://homeseer.sh/download/archive/release/linux_4_1_16_0.tar.gz" "" $@
-#build "4.1.17"   "https://homeseer.sh/download/archive/release/linux_4_1_17_0.tar.gz" "" $@
-#build "4.1.18"   "https://homeseer.sh/download/archive/release/linux_4_1_18_0.tar.gz" "" $@
-#build "4.1.100"  "https://homeseer.sh/download/archive/beta/linux_4_1_100_0.tar.gz" ""   $@
-#build "4.2.0"    "https://homeseer.sh/download/archive/release/linux_4_2_0_0.tar.gz" ""  $@
-#build "4.2.0.5"  "https://homeseer.sh/download/archive/beta/linux_4_2_0_5.tar.gz" ""     $@
-#build "4.2.0.8"  "https://homeseer.sh/download/archive/beta/linux_4_2_0_8.tar.gz" ""     $@
-#build "4.2.1"    "https://homeseer.sh/download/archive/beta/linux_4_2_1_0.tar.gz" ""     $@
-#build "4.2.2"    "https://homeseer.sh/download/archive/beta/linux_4_2_2_0.tar.gz" ""     $@
-#build "4.2.4"    "https://homeseer.sh/download/archive/beta/linux_4_2_4_0.tar.gz" ""     $@
-#build "4.2.5"    "https://homeseer.sh/download/archive/release/linux_4_2_5_0.tar.gz" ""  $@
-#build "4.2.6"    "https://homeseer.sh/download/archive/release/linux_4_2_6_0.tar.gz" ""  $@
-#build "4.2.7"    "https://homeseer.sh/download/archive/release/linux_4_2_7_0.tar.gz" ""  $@
-#build "4.2.8"    "https://homeseer.sh/download/archive/release/linux_4_2_8_0.tar.gz" ""  $@
-#build "4.2.11"   "https://homeseer.sh/download/archive/release/linux_4_2_11_0.tar.gz" "" $@
-#build "4.2.11.3" "https://homeseer.sh/download/archive/beta/linux_4_2_11_3.tar.gz"   ""  $@
-#build "4.2.12"   "https://homeseer.sh/download/archive/release/linux_4_2_12_0.tar.gz" "" $@
-#build "4.2.13"   "https://homeseer.sh/download/archive/release/linux_4_2_13_0.tar.gz" "" $@
-#build "4.2.14"   "https://homeseer.sh/download/archive/release/linux_4_2_14_0.tar.gz" "" $@
-#build "4.2.15"   "https://homeseer.sh/download/archive/release/linux_4_2_15_0.tar.gz" "" $@
-#build "4.2.16"   "https://homeseer.sh/download/archive/release/linux_4_2_16_0.tar.gz" "" $@
-#build "4.2.16.7" "https://homeseer.sh/download/archive/beta/linux_4_2_16_7.tar.gz"   ""  $@
-#build "4.2.17"   "https://homeseer.sh/download/archive/release/linux_4_2_17_0.tar.gz" "" $@
-#build "4.2.17.2" "https://homeseer.sh/download/archive/beta/linux_4_2_17_2.tar.gz"   ""  $@
-#build "4.2.17.4" "https://homeseer.sh/download/archive/beta/linux_4_2_17_4.tar.gz" ""    $@
-#build "4.2.18.3" "https://homeseer.sh/download/archive/release/linux_4_2_18_3.tar.gz" "" $@
-#build "4.2.18.5" "https://homeseer.sh/download/archive/release/linux_4_2_18_5.tar.gz" "" $@
-#build "4.2.18.8" "https://homeseer.sh/download/archive/beta/linux_4_2_18_8.tar.gz" ""    $@
-#build "4.2.18.9" "https://homeseer.sh/download/archive/beta/linux_4_2_18_9.tar.gz" ""    $@
-#build "4.2.18.12" "https://homeseer.sh/download/archive/beta/linux_4_2_18_12.tar.gz" ""  $@
-#build "4.2.18.18" "https://homeseer.sh/download/archive/beta/linux_4_2_18_18.tar.gz" ""  $@
-#build "4.2.18.19" "https://homeseer.sh/download/archive/beta/linux_4_2_18_19.tar.gz" ""  $@
-#build "4.2.18.20" "https://homeseer.sh/download/archive/beta/linux_4_2_18_20.tar.gz" ""  $@
-#build "4.2.18.21" "https://homeseer.sh/download/archive/beta/linux_4_2_18_21.tar.gz" ""  $@
-#build "4.2.18.29" "https://homeseer.sh/download/archive/beta/linux_4_2_18_29.tar.gz" "" $@
-#build "4.2.19.0"  "https://homeseer.sh/download/archive/release/linux_4_2_19_0.tar.gz" "" $@
-#build "4.2.19.1"  "https://homeseer.sh/download/archive/beta/linux_4_2_19_1.tar.gz" "" $@
-#build "4.2.19.4"  "https://homeseer.sh/download/archive/beta/linux_4_2_19_4.tar.gz" "" $@
-#build "4.2.19.5"  "https://homeseer.sh/download/archive/release/linux_4_2_19_5.tar.gz" "" $@
-#build "4.2.19.9"  "https://homeseer.sh/download/archive/beta/linux_4_2_19_9.tar.gz" "" $@
-#build "4.2.20.0"  "https://homeseer.sh/download/archive/release/linux_4_2_20_0.tar.gz" "" $@
-#build "4.2.20.6"  "https://homeseer.sh/download/archive/beta/linux_4_2_20_6.tar.gz" "" $@
-#build "4.2.20.7"  "https://homeseer.sh/download/archive/beta/linux_4_2_20_7.tar.gz" "" $@
-#build "4.2.20.9"  "https://homeseer.sh/download/archive/beta/linux_4_2_20_9.tar.gz" "" $@
-#build "4.2.20.11" "https://homeseer.sh/download/archive/beta/linux_4_2_20_11.tar.gz" "" $@
-#build "4.2.20.12" "https://homeseer.sh/download/archive/beta/linux_4_2_20_12.tar.gz" "" $@
-#build "4.2.21.0"  "https://homeseer.sh/download/archive/release/linux_4_2_21_0.tar.gz" "" $@
+# Warn about multi-platform builds with --load
+if echo "$BUILD_PLATFORMS" | grep -q ',' && [ "${PUSH_TO_REGISTRY:-false}" != "true" ]; then
+  echo "Warning: Multi-platform builds ($BUILD_PLATFORMS) require --push to a registry. Using --load for single platform only."
+  # Use only the first platform when using --load
+  if [ "${PUSH_TO_REGISTRY:-false}" != "true" ]; then
+    BUILD_PLATFORMS=$(echo "$BUILD_PLATFORMS" | cut -d ',' -f 1)
+    echo "Using only $BUILD_PLATFORMS for local build"
+  fi
+fi
 
-# latest beta build
-build "4.2.20.13" "https://homeseer.sh/download/archive/beta/linux_4_2_20_13.tar.gz" "--tag homeseer/homeseer:beta" $@
+# Create a persistent buildx builder if it doesn't exist
+if ! docker buildx inspect homeseer-builder &>/dev/null; then
+  echo "Creating persistent buildx builder..."
+  docker buildx create --name homeseer-builder --use --driver docker-container --driver-opt network=host
+else
+  echo "Using existing buildx builder..."
+  docker buildx use homeseer-builder
+fi
 
-# latest release build
-build "4.2.21.2"  "https://homeseer.sh/download/archive/release/linux_4_2_21_2.tar.gz" "--tag homeseer/homeseer:latest" $@
+# Initialize buildx for the target platforms
+docker buildx inspect --bootstrap
+
+# Set up cache configuration
+CACHE_DIR="./docker-cache"
+mkdir -p "$CACHE_DIR"
+
+# Add these cache-specific flags - separate from and to caches
+CACHE_FROM="--cache-from=type=local,src=$CACHE_DIR"
+CACHE_TO="--cache-to=type=local,dest=$CACHE_DIR,mode=max"
+
+# For better caching on minor changes, set a consistent build timestamp
+BUILD_TIMESTAMP="$(date -u +'%Y-%m-%dT00:00:00Z')"
+
+# Use BuildKit inline cache feature
+INLINE_CACHE="--build-arg BUILDKIT_INLINE_CACHE=1"
+
+# If we're pushing to a registry, enable registry caching
+if [ "${PUSH_TO_REGISTRY:-false}" = "true" ]; then
+  echo "Enabling registry caching for remote builds"
+  REGISTRY_CACHE="--cache-from=type=registry,ref=${IMAGE_OUTPUT}:buildcache --cache-to=type=registry,ref=${IMAGE_OUTPUT}:buildcache,mode=max"
+fi
+
+# Determine whether to use --load or --push
+if [ "${PUSH_TO_REGISTRY:-false}" = "true" ]; then
+  OUTPUT_FLAG="--push"
+  echo "Building for registry push"
+else
+  OUTPUT_FLAG="--load"
+  echo "Building for local use (--load)"
+fi
+
+# Display buildx info
+echo "Using buildx builder with capabilities:"
+docker buildx inspect
+
+#-----------------------------------------------------------------------------------------
+# Build HomeSeer image
+echo "Building HomeSeer image: ${IMAGE_OUTPUT}:$VERSION"
+echo "Using platforms: $BUILD_PLATFORMS"
+echo "Cache directory: $CACHE_DIR"
+
+# Use --progress=plain during development, auto for production
+PROGRESS="--progress=plain"
+
+# Build the image
+docker buildx build \
+  $PROGRESS \
+  $CACHE_FROM \
+  $CACHE_TO \
+  $REGISTRY_CACHE \
+  $INLINE_CACHE \
+  --build-arg IMAGE_BASE_NAME="${IMAGE_BASE_NAME}" \
+  --build-arg IMAGE_BASE_TAG="${IMAGE_BASE_TAG}" \
+  --build-arg IMAGE_OUTPUT="${IMAGE_OUTPUT}" \
+  --build-arg HOMESEER_DOWNLOAD_URL="$HOMESEER_DOWNLOAD_URL" \
+  --build-arg NODEJS_VERSION="${NODEJS_VERSION}" \
+  --build-arg HOMESEER_UID="${HOMESEER_UID}" \
+  --build-arg HOMESEER_GID="${HOMESEER_GID}" \
+  --build-arg TZ="$TZ" \
+  --build-arg LANG="$LANG" \
+  --build-arg VERSION="$VERSION" \
+  --build-arg BUILDDATE="$BUILD_TIMESTAMP" \
+  --build-arg LABEL_SCHEMA_URL="$LABEL_SCHEMA_URL" \
+  --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
+  --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
+  --build-arg DEBIAN_FRONTEND="noninteractive" \
+  --tag "${IMAGE_OUTPUT}:latest" \
+  --tag "${IMAGE_OUTPUT}:$VERSION-${IMAGE_BASE_NAME}" \
+  --tag "${IMAGE_OUTPUT}:${IMAGE_BASE_NAME}-${IMAGE_BASE_TAG}" \
+  --platform "$BUILD_PLATFORMS" \
+  --file Dockerfile \
+  $OUTPUT_FLAG \
+  . || {
+    echo "Warning: Build failed, checking for images anyway..."
+    docker images | grep "${IMAGE_OUTPUT}" || echo "No images found for ${IMAGE_OUTPUT}"
+    exit 1
+  }
+
+# Show the built images
+echo "Build completed. Available images:"
+docker images | grep "${IMAGE_OUTPUT}" || echo "No images found for ${IMAGE_OUTPUT}"

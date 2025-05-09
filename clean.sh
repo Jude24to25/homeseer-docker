@@ -1,4 +1,5 @@
 #!/bin/bash -e
+
 ############################################
 # HOMESEER (V4) LINUX - DOCKER BUILD SCRIPT
 ############################################
@@ -31,8 +32,26 @@ echo "* CLEANING HOMESEER DOCKER IMAGES                                    *"
 echo "**********************************************************************"
 echo
 
-# remove the builder instance
-docker buildx rm homeseer-builder || true
+# # Load environment variables from .env file if it exists and check if variables are set
+# source .env
+# ./check-env.sh
 
-# remove any containers from local Docker registry
-docker images -a | grep "homeseer/homeseer" | awk '{print $3}' | xargs docker rmi
+# # remove the builder instance
+# docker buildx rm homeseer-builder || true
+# docker builder prune -a -f
+# docker buildx prune -a -f
+
+# # remove any containers from local Docker registry
+# docker images -a | grep "${IMAGE_OUTPUT}" | awk '{print $3}' | xargs docker rmi
+
+# Clean unused containers
+docker container prune -f
+
+# Clean dangling images
+docker image prune -a -f
+
+# Clean build cache
+docker buildx prune --all -f
+
+# Clean all unused objects
+docker system prune --all -f

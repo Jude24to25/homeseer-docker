@@ -24,7 +24,7 @@ function install_homeseer {
   tar --strip-components=1 -xzvf /homeseer.tar.gz -C /homeseer
 
   # write a flagging file to denote that we have installed the HomeSeer application in this container
-  touch /homeseer-installed
+  touch /homeseer/homeseer-installed
 
   # remove unnecessary files from the HomeSeer application directory
   rm -f /homeseer/hs_sentry.log
@@ -61,13 +61,41 @@ function initialize_homeseer {
   echo " HOMESEER CONTAINER - SET TIME ZONE: $TZ"
   echo "**********************************************************************"
   echo
-  TZ="${TZ:=America/New_York}"
-  LANG="${LANG:=en_US.UTF-8}"
-  export LANG=$LANG
-  export TZ=$TZ
-  ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-  dpkg-reconfigure --frontend noninteractive tzdata
-  update-locale LANG=$LANG
+
+  # Validate TZ and LANG
+  if [ -z "$TZ" ]; then
+      echo "Error: TZ environment variable is not set. Please define TZ in .env."
+      exit 1
+  fi
+  if [ -z "$LANG" ]; then
+      echo "Error: LANG environment variable is not set. Please define LANG in .env."
+      exit 1
+  fi
+
+  # ----- CHANGES START HERE -----
+  # Set timezone - CHANGED: We now check if we're running as root. If not, we skip
+  # the timezone symlinking and just print a message. This avoids the permission errors.
+  if [ "$(id -u)" -eq 0 ]; then
+    # Running as root - can set timezone system-wide
+    ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
+  else
+    # Running as non-root user - just display the timezone but don't try to modify system files
+    echo "Note: Running as non-root user. Using configured timezone $TZ but not modifying system files."
+    # The actual timezone will still be used by applications even though we can't create the symlink
+  fi
+  # ----- CHANGES END HERE -----
+  
+  export LANG="$LANG"
+  export TZ="$TZ"
+
+  # Original code (commented out):
+  # TZ="${TZ:=America/Los_Angeles}"
+  # LANG="${LANG:=en_US.UTF-8}"
+  # export LANG=$LANG
+  # export TZ=$TZ
+  # ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+  # dpkg-reconfigure --frontend noninteractive tzdata
+  # update-locale LANG=$LANG
 
   echo
   echo "**********************************************************************"
@@ -109,17 +137,42 @@ function initialize_homeseer {
   # delete existing pid if found
   [ -e /var/run/avahi-daemon/pid ] && rm -f /var/run/avahi-daemon/pid
 
-  # fix avahi config for synology dsm
+  # ----- CHANGES START HERE -----
+  # fix avahi config for synology dsm - CHANGED: Use /homeseer directory to write configs
+  # and don't try to modify /etc directly. Create a local copy in /homeseer that avahi
+  # will use as a configuration file
+  
+  # Create a local copy of the avahi config to work with
+  cp /etc/avahi/avahi-daemon.conf /homeseer/avahi-daemon.conf || echo "Warning: Could not copy avahi config (continuing anyway)"
+  
   if [ ! -z "$DSM_HOSTNAME" ]; then
-    echo " -> AVAHI configuration file updated for Synology DSM_HOSTNAME: ${DSM_HOSTNAME}"
-    sed -i "s/.*host-name.*/host-name=${DSM_HOSTNAME}/" /etc/avahi/avahi-daemon.conf
+    echo " -> AVAHI configuration for Synology DSM_HOSTNAME: ${DSM_HOSTNAME}"
+    # Update our local copy - not trying to write back to /etc
+    sed "s/.*host-name.*/host-name=${DSM_HOSTNAME}/" /homeseer/avahi-daemon.conf > /homeseer/avahi-daemon.conf.new
+    mv /homeseer/avahi-daemon.conf.new /homeseer/avahi-daemon.conf
   else
-    sed -i "s/.*host-name.*/#host-name=/" /etc/avahi/avahi-daemon.conf
+    # Update our local copy - not trying to write back to /etc
+    sed "s/.*host-name.*/#host-name=/" /homeseer/avahi-daemon.conf > /homeseer/avahi-daemon.conf.new
+    mv /homeseer/avahi-daemon.conf.new /homeseer/avahi-daemon.conf
   fi
-  echo " -> AVAHI configuration file updated: /etc/avahi/avahi-daemon.conf"
+  echo " -> Using local AVAHI configuration file: /homeseer/avahi-daemon.conf"
 
-  # launch AVAHI as a background task and redirect STDOUT & STDERR to NULL
-  avahi-daemon --no-chroot -f /etc/avahi/avahi-daemon.conf 2>/dev/null &
+  # launch AVAHI using our local config instead of /etc/avahi/avahi-daemon.conf
+  avahi-daemon --no-chroot -f /homeseer/avahi-daemon.conf 2>/dev/null &
+  # ----- CHANGES END HERE -----
+  
+  # Original code (commented out):
+  # if [ ! -z "$DSM_HOSTNAME" ]; then
+  #   echo " -> AVAHI configuration file updated for Synology DSM_HOSTNAME: ${DSM_HOSTNAME}"
+  #   sed "s/.*host-name.*/host-name=${DSM_HOSTNAME}/" /etc/avahi/avahi-daemon.conf > /homeseer/avahi-daemon.conf.tmp && \
+  #   mv /homeseer/avahi-daemon.conf.tmp /etc/avahi/avahi-daemon.conf
+  # else
+  #   sed "s/.*host-name.*/#host-name=/" /etc/avahi/avahi-daemon.conf > /homeseer/avahi-daemon.conf.tmp && \
+  #   mv /homeseer/avahi-daemon.conf.tmp /etc/avahi/avahi-daemon.conf
+  # fi
+  # echo " -> AVAHI configuration file updated: /etc/avahi/avahi-daemon.conf"
+  # avahi-daemon --no-chroot -f /etc/avahi/avahi-daemon.conf 2>/dev/null &
+  
   AVAHI_PID=$!
   echo " -> AVAHI Daemon started in background (PID=$AVAHI_PID)"
   ps -A | grep avahi-daemon || true
@@ -131,13 +184,13 @@ function initialize_homeseer {
 function start_homeseer {
 
   # handle restarts if needed
-  if [ -f "/homeseer-restart" ]; then
+  if [ -f "/homeseer/homeseer-restart" ]; then
     echo
     echo "**********************************************************************"
     echo " HOMESEER CONTAINER - RESTARTING HOMESEER"
     echo "**********************************************************************"
     echo
-    rm -f /homeseer-restart
+    rm -f /homeseer/homeseer-restart
   else
     echo
     echo "**********************************************************************"
@@ -283,8 +336,8 @@ echo "PRESS CTRL-C TO SHUTDOWN; OR USE 'docker stop homeseer' COMMAND."
 echo
 
 # install HomeSeer if not already installed by this container instance
-# (the "/homeseer-installed" file is written after installation)
-if [[ ! -f "/homeseer-installed" ]] && [ ! -f "/homeseer/no-install" ]; then
+# (the "/homeseer/homeseer-installed" file is written after installation)
+if [[ ! -f "/homeseer/homeseer-installed" ]] && [ ! -f "/homeseer/no-install" ]; then
   echo "Homeseer is not installed in this container; install it now."
   # 'install' will overwrite the "/homeseer" directory contents with
   # application files from the embedded archive file included in this
@@ -311,9 +364,9 @@ RunCounter=0;
 # program runtime loop; handles software initiated restarts/reboots/updates
 # continuous loop while ...
 # (1) RunCounter=0; this denoted the first run after container startup
-# (2) if a restart flag file exists on the root directory ("/homeseer-restart")
+# (2) if a restart flag file exists on the root directory ("/homeseer/homeseer-restart")
 # (3) or if an update file exists in the homeseer directory ("/homeseer/hs4_sel*")
-while [[ RunCounter -eq 0 ]] || [[ -f "/homeseer-restart" ]] || [[ "`echo /homeseer/hs4_sel*`" != "/homeseer/hs4_sel*" ]]
+while [[ RunCounter -eq 0 ]] || [[ -f "/homeseer/homeseer-restart" ]] || [[ "`echo /homeseer/hs4_sel*`" != "/homeseer/hs4_sel*" ]]
 do
    # if an update file exists; then wait for it to be removed by the updater
    while [[ "`echo /homeseer/hs4_sel*`" != "/homeseer/hs4_sel*" ]]

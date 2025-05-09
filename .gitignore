@@ -42,3 +42,11 @@ Thumbs.db
 .idea/
 out/
 .idea_modules/
+
+# Miscelaneous #
+################
+.env
+debug.log
+/docker-cache
+/archive
+.todo

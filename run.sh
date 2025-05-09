@@ -3,6 +3,11 @@
 ##############################################
 # HOMESEER (V4) LINUX - DOCKER RUN CONTAINER
 ##############################################
+
+# Load environment variables from .env file if it exists and check if variables are set
+source .env
+./check-env.sh
+
 docker run \
        --interactive \
        --tty \
@@ -13,10 +18,13 @@ docker run \
        --publish 10300:10300 \
        --publish 10401:10401 \
        --publish 11000:11000 \
-       --env TZ=America/New_York \
-       --env LANG=en_US.UTF-8 \
+       --device /dev/ttyACM0 \
+       --env TZ=$TZ \
+       --env LANG=$LANG \
        --env HOMESEER_CREDENTIALS="default:default" \
-       homeseer/homeseer:latest $@
+       --restart always \
+       --detach \
+       ${IMAGE_OUTPUT}:latest $@
 
 # PUBLISHED IP PORTS
 # -------------------------

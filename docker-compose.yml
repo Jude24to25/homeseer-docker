@@ -1,41 +1,146 @@
-# --------------------------------------------------
-# HOMESEER LINUX SERVER
-# --------------------------------------------------
-# This container hosts the HomeSeer V4 server.
-# This config will create standalone 'homeseer-data'
-# docker volume to store all homeseer runtime
-# files. (logs, config, backups, app files)
-#
-# Disclaimers:
-# --------------
-# This docker container is not supported, sponsored
-# or directly affiliated with Homeseer
-# (https://homeseer.com).
-#
-# --------------------------------------------------
-#    (Developed with ♥ by SavageSoftware, LLC.)
-# --------------------------------------------------
-version: '3.8'
-
-volumes:
-  homeseer-data:
-    name: homeseer-data
+version: "3.8"
 
 services:
-  homeseer:
-    container_name: homeseer
-    image: homeseer/homeseer:latest
-    hostname: homeseer
-    restart: unless-stopped
-    network_mode: bridge
-    ports:
-      - 80:80
-      - 10200:10200
-      - 10300:10300
-      - 10401:10401
-      - 11000:11000
-    environment:
-      TZ: America/New_York
-      LANG: en_US.UTF-8
+  homeseer-matterjs:
+    image: node:22                    # Consider using slim for smaller size
+    container_name: homeseer-matterjs
+    hostname: homeseer-matterjs
+    working_dir: /app
     volumes:
-      - homeseer-data:/homeseer
+      - $DIR_HOMESEER_MATTERJS/app:/app                                  # Persistent storage for application code
+      - $DIR_HOMESEER/bin/MatterController:/app/bin/MatterController     # HomeSeer downloads plugin here
+      - $DIR_HOMESEER/Data/MatterController:/app/Data/MatterController   # Matter Controller data backed up here
+      - /var/run/dbus:/var/run/dbus                                      # D-Bus system socket
+      - /var/run/bluetooth:/var/run/bluetooth                            # Bluetooth socket
+    network_mode: "host"              # Network host mode for Matter controller. Note: This may bypass socket-proxy
+    environment:
+      - NODE_ENV=development
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+      - TS_NODE_COMPILER_OPTIONS={"skipLibCheck":true,"noImplicitAny":false}
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+          apt-get update && apt-get install -y git bluez libbluetooth-dev bluetooth avahi-daemon libavahi-client-dev libudev-dev procps python3 make g++ && \
+          echo "***********************************************************************************" && \
+          echo "Extracted the following Matter JS Server version from the HomeSeer plugin - $(ls -t /app/bin/MatterController/matter-js-server*.zip 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')" && \
+          echo "***********************************************************************************" && \
+          (cd /app && /app/bin/MatterController/install_matterjsserver.sh $(ls -t /app/bin/MatterController/matter-js-server*.zip 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'))
+          node /app/bin/MatterController/matter-js-server/dist/bin/server.js --storage-location ./store --port 3500 --fabric-label HomeSeer
+    tty: true                         # Allocate a pseudo-TTY
+    stdin_open: true                  # Keep STDIN open even if not attached
+    ports:
+      - "3500:3500"                   # Communication between HomeSeer and MatterJS Server
+      - "5540:5540"                   # Used by Matter Controller
+      - "38799:38799"                 # Used by Matter Controller
+    devices:
+      - /dev/bluetooth:/dev/bluetooth # Only include if you need bluetooth access
+    cap_add:
+      - NET_ADMIN                     # Network administration capabilities
+      - NET_RAW                       # Raw socket access (for network protocols)
+      - SYS_RAWIO                     # Raw I/O access (if needed for direct hardware control)
+    privileged: true                  # Use privileged mode only if absolutely necessary. If possible, enumerate specific capabilities
+
+  homeseer-zwavejs:
+    image: zwavejs/zwave-js-ui:9.33.0
+    container_name: homeseer-zwavejs
+    hostname: homeseer-zwavejs
+    restart: always
+    environment:
+      - TZ=America/Los_Angeles
+      - NODE_ENV=production
+      - SESSION_SECRET=$ZWAVE_SESSION_SECRET      # Remember to change this to a random string
+      - ZWAVEJS_EXTERNAL_CONFIG=/usr/src/app/store/.config-db
+      - ZWAVEJS_AUTO_UPDATE_CONFIG=true
+      - SERVER_HOST=0.0.0.0
+      - STORE_BACKUP_PATH=/backup
+      - STORE_BACKUP_ENABLED=true
+      - ZWAVE_DEVICE=$ZWAVE_DEVICE_PATH           # Explicitly set the Z-Wave device path
+    ports:
+      - "8091:8091"                    # Web UI port
+      - "3000:3000"                    # Websocket server for HomeSeer Z-Wave Plus plugin
+    volumes:
+      - $DIR_HOMESEER_ZWAVEJS:/usr/src/app/store
+      - $DIR_HOMESEER:/homeseer
+      - $DIR_HOMESEER_BACKUP/zwavejs:/backup
+    devices:
+      - $ZWAVE_DEVICE_PATH:/dev/zwave  # Adjust this to match your Z-Wave controller path
+    networks:
+      - docker_default                 # Join the same network as HomeSeer
+      - socket_proxy
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: 3
+    security_opt:
+      - seccomp=unconfined             # Maintained from your original configuration
+
+  homeseer:
+    image: homeseer:4.2.22.4-ubuntu
+    container_name: homeseer
+    hostname: homeseer
+    user: 8675:1003                    # Replace with your user/group ID
+    entrypoint:
+      - /usr/local/sbin/homeseer
+    environment:
+      - TZ=America/Los_Angeles
+      - LANG=en_US.UTF-8
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - MONO_VERSION=6.12.0.182
+      - HOMESEER_CREDENTIALS=
+      - DOCKER_HOST=tcp://socket-proxy:2375
+    ipc: private
+    privileged: true
+    networks:
+      - docker_default
+      - socket_proxy
+    ports:
+      - 80:80/tcp
+      - 10200:10200/tcp
+      - 10300:10300/tcp
+      - 10401:10401/tcp
+      - 11000:11000/tcp
+    restart: always
+    volumes:
+      - $DIR_HOMESEER:/homeseer
+      - $DIR_HOMESEER_BACKUP:/backup
+    working_dir: /homeseer
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: 3
+    cap_drop:
+      - AUDIT_CONTROL
+      - BLOCK_SUSPEND
+      - DAC_READ_SEARCH
+      - IPC_LOCK
+      - IPC_OWNER
+      - LEASE
+      - LINUX_IMMUTABLE
+      - MAC_ADMIN
+      - MAC_OVERRIDE
+      - NET_ADMIN
+      - NET_BROADCAST
+      - SYSLOG
+      - SYS_ADMIN
+      - SYS_BOOT
+      - SYS_MODULE
+      - SYS_NICE
+      - SYS_PACCT
+      - SYS_PTRACE
+      - SYS_RAWIO
+      - SYS_RESOURCE
+      - SYS_TIME
+      - SYS_TTY_CONFIG
+      - WAKE_ALARM
+
+networks:
+  docker_default:
+    name: docker_default
+    external: true
+  socket_proxy:
+    name: socket_proxy
+    external: true
