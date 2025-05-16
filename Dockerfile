@@ -155,7 +155,6 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
 #     npm --version && \
 #     # Install additional global packages required for Matter
 #     npm install -g node-gyp
-#     Create wrapper scripts for node and npm
 
 # Clean up apt cache
 RUN apt-get clean

@@ -14,7 +14,7 @@ if [ -z "$HOMESEER_DOWNLOAD_URL" ] || [ -z "$BUILD_PLATFORMS" ] || \
    [ -z "$LANG" ] || [ -z "$TZ" ]; then
   echo "Error: One or more required environment variables are not set in .env."
   echo "Please check the following and define any missing variables in .env:"
-  ./display-env.sh
+  ./env-display.sh
   exit 1
 fi
 
@@ -46,6 +46,8 @@ fi
 if [ -z "$NODEJS_VERSION" ]; then
   echo "Error: NODEJS_VERSION must not be blank."
   exit 1
+elif [ "$NODEJS_VERSION" == "none" ]; then
+  echo "  "  # NodeJS installation disabled in .env
 elif [ "$NODEJS_VERSION" != "latest" ] && ! echo "$NODEJS_VERSION" | grep -Eq '^[0-9]+$'; then
   echo "Error: NODEJS_VERSION must be a positive integer (e.g., 18, 20) or 'latest'."
   exit 1
@@ -54,4 +56,4 @@ elif [ "$NODEJS_VERSION" != "latest" ] && [ "$NODEJS_VERSION" -lt 18 ]; then
   exit 1
 fi
 
-./display-env.sh
+./env-display.sh

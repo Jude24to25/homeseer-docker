@@ -45,8 +45,7 @@ out/
 
 # Miscelaneous #
 ################
-.env
-debug.log
-/docker-cache
-/archive
-.todo
+*.env
+/.docker-cache/
+/.local/
+/.debug/

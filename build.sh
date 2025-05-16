@@ -9,6 +9,10 @@
 #-----------------------------------------------------------------------------------------
 #  ./build.sh 2>&1 | tee debug.log
 
+# Include debug functionality
+source ./debug.sh
+log "INFO" "Starting build process..."
+
 echo
 echo "**********************************************************************"
 echo "* BUILDING HOMESEER LINUX DOCKER IMAGE                               *"
@@ -22,7 +26,7 @@ fi
 
 # Load environment variables from .env file if it exists and check if variables are set
 source .env
-./check-env.sh
+./env-check.sh
 
 # Extract version from HOMESEER_DOWNLOAD_URL
 VERSION=$(basename "$HOMESEER_DOWNLOAD_URL" | sed -n 's/.*linux_\([0-9]_[0-9]_[0-9]\{1,\}_[0-9]\).*/\1/p' | tr '_' '.')
@@ -56,7 +60,7 @@ fi
 docker buildx inspect --bootstrap
 
 # Set up cache configuration
-CACHE_DIR="./docker-cache"
+CACHE_DIR="./.docker-cache"
 mkdir -p "$CACHE_DIR"
 
 # Add these cache-specific flags - separate from and to caches
@@ -68,6 +72,9 @@ BUILD_TIMESTAMP="$(date -u +'%Y-%m-%dT00:00:00Z')"
 
 # Use BuildKit inline cache feature
 INLINE_CACHE="--build-arg BUILDKIT_INLINE_CACHE=1"
+
+# Initialize REGISTRY_CACHE as empty string
+REGISTRY_CACHE=""
 
 # If we're pushing to a registry, enable registry caching
 if [ "${PUSH_TO_REGISTRY:-false}" = "true" ]; then
@@ -134,3 +141,9 @@ docker buildx build \
 # Show the built images
 echo "Build completed. Available images:"
 docker images | grep "${IMAGE_OUTPUT}" || echo "No images found for ${IMAGE_OUTPUT}"
+log "INFO" "Build process completed successfully"
+
+# Disable tracing before exit (if enabled)
+if [[ "$DEBUG" -eq 1 ]]; then
+  set +x
+fi
