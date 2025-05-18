@@ -47,12 +47,25 @@ if [ -z "$NODEJS_VERSION" ]; then
   echo "Error: NODEJS_VERSION must not be blank."
   exit 1
 elif [ "$NODEJS_VERSION" == "none" ]; then
-  echo "  "  # NodeJS installation disabled in .env
-elif [ "$NODEJS_VERSION" != "latest" ] && ! echo "$NODEJS_VERSION" | grep -Eq '^[0-9]+$'; then
-  echo "Error: NODEJS_VERSION must be a positive integer (e.g., 18, 20) or 'latest'."
+  : # NodeJS installation disabled, no output needed
+elif [ "$NODEJS_VERSION" == "default" ]; then
+  : # Using default NodeJS version, no output needed
+elif [ "$NODEJS_VERSION" == "latest" ]; then
+  : # Using latest NodeJS version, no output needed
+elif echo "$NODEJS_VERSION" | grep -Eq '^[0-9]+$' ; then
+  if [ "$NODEJS_VERSION" -lt 18 ]; then
+    echo "Error: When specifying a numeric NODEJS_VERSION, it must be >= 18."
+    exit 1
+  fi
+  # Valid specific version, no output needed
+else
+  echo "Error: NODEJS_VERSION must be a positive integer >= 18, 'latest', 'default', or 'none'."
   exit 1
-elif [ "$NODEJS_VERSION" != "latest" ] && [ "$NODEJS_VERSION" -lt 18 ]; then
-  echo "Error: NODEJS_VERSION must be an integer >= 18 or 'latest'."
+fi
+
+# Validate PUSH_TO_REGISTRY
+if [[ -z "$PUSH_TO_REGISTRY" || "$PUSH_TO_REGISTRY" != "true" && "$PUSH_TO_REGISTRY" != "false" ]]; then
+  echo "Error: PUSH_TO_REGISTRY must be set to either 'true' or 'false'"
   exit 1
 fi
 

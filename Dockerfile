@@ -52,7 +52,7 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && \
-    apt-get upgrade -y
+    apt-get full-upgrade -y
 
 # 3. Install locales separately since they rarely change
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
@@ -79,23 +79,29 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
 RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     if [ "$IMAGE_BASE_NAME" = "ubuntu" ]; then \
-    # For Ubuntu 24.04, use the jammy repository as it's the most recent supported
+    # For Ubuntu, use the appropriate repository
         apt-get install -y gnupg ca-certificates && \
-        gpg --homedir /tmp --no-default-keyring --keyring /usr/share/keyrings/mono-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
+        mkdir -p /tmp/gpg && \
+        curl -fsSL https://download.mono-project.com/repo/xamarin.gpg | gpg --homedir /tmp/gpg --no-default-keyring --keyring /tmp/mono-archive-keyring.gpg --import && \
+        gpg --homedir /tmp/gpg --no-default-keyring --keyring /tmp/mono-archive-keyring.gpg --export --output /usr/share/keyrings/mono-archive-keyring.gpg && \
         echo "deb [signed-by=/usr/share/keyrings/mono-archive-keyring.gpg] https://download.mono-project.com/repo/ubuntu stable-focal main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
         apt-get update && \
         apt-get install -y mono-complete mono-devel; \
     elif [ "$IMAGE_BASE_NAME" = "debian" ]; then \
-    # For Debian 12 (Bookworm), use the most appropriate repo
+    # For Debian, use the appropriate repository
         apt-get install -y gnupg ca-certificates && \
-        gpg --homedir /tmp --no-default-keyring --keyring /usr/share/keyrings/mono-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
+        mkdir -p /tmp/gpg && \
+        curl -fsSL https://download.mono-project.com/repo/xamarin.gpg | gpg --homedir /tmp/gpg --no-default-keyring --keyring /tmp/mono-archive-keyring.gpg --import && \
+        gpg --homedir /tmp/gpg --no-default-keyring --keyring /tmp/mono-archive-keyring.gpg --export --output /usr/share/keyrings/mono-archive-keyring.gpg && \
         echo "deb [signed-by=/usr/share/keyrings/mono-archive-keyring.gpg] https://download.mono-project.com/repo/debian stable-focal main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
         apt-get update && \
         apt-get install -y mono-complete mono-devel; \
     elif [ "$IMAGE_BASE_NAME" != "mono" ]; then \
-    # For any other base image (that isn't mono), make a best guess based on /etc/os-release
+    # For any other base image (that isn't mono)
         apt-get install -y gnupg ca-certificates && \
-        gpg --homedir /tmp --no-default-keyring --keyring /usr/share/keyrings/mono-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
+        mkdir -p /tmp/gpg && \
+        curl -fsSL https://download.mono-project.com/repo/xamarin.gpg | gpg --homedir /tmp/gpg --no-default-keyring --keyring /tmp/mono-archive-keyring.gpg --import && \
+        gpg --homedir /tmp/gpg --no-default-keyring --keyring /tmp/mono-archive-keyring.gpg --export --output /usr/share/keyrings/mono-archive-keyring.gpg && \
         echo "deb [signed-by=/usr/share/keyrings/mono-archive-keyring.gpg] https://download.mono-project.com/repo/debian stable-focal main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
         apt-get update && \
         apt-get install -y mono-complete mono-devel; \
@@ -131,33 +137,47 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
     fi && \
     apt-get install -y docker-ce-cli
 
-# # 9. Install specific Node.js version for HomeSeer Matter Controller plugin
-# RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
-#     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-#     apt-get install -y ca-certificates curl gnupg && \
-#     mkdir -p /etc/apt/keyrings && \
-#     # Download and set up Node.js repository for specified version
-#     if [ ! -z "$NODEJS_VERSION" ] && [ "$NODEJS_VERSION" != "latest" ]; then \
-#         curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-#         echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODEJS_VERSION}.x nodistro main" > /etc/apt/sources.list.d/nodesource.list; \
-#     elif [ "$NODEJS_VERSION" = "latest" ]; then \
-#         curl -fsSL https://deb.nodesource.com/setup_current.x | bash -; \
-#     fi && \
-#     apt-get update && \
-#     # Install Matter dependencies
-#     apt-get install -y bluetooth bluez libbluetooth-dev libudev-dev && \
-#     # Install Node.js with additional build dependencies needed for native modules
-#     apt-get install -y nodejs make g++ gcc && \
-#     # Allow Node.js directly access Bluetooth hardware when needed
-#     setcap cap_net_raw+eip $(eval readlink -f `which node`) && \
-#     # Verify installed version
-#     node --version && \
-#     npm --version && \
-#     # Install additional global packages required for Matter
-#     npm install -g node-gyp
+# 9. Install specific Node.js version for HomeSeer Matter Controller plugin
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    if [ ! -z "$NODEJS_VERSION" ] && [ "$NODEJS_VERSION" != "none" ]; then \
+        apt-get install -y ca-certificates curl gnupg && \
+        mkdir -p /etc/apt/keyrings && \
+        # Install Matter dependencies
+        apt-get install -y bluetooth bluez libbluetooth-dev libudev-dev && \
+        # Handle different Node.js version cases
+        if [[ "$NODEJS_VERSION" =~ ^[0-9]+$ ]] && [ "$NODEJS_VERSION" -ge 18 ]; then \
+            # Case a: Specific version as integer >= 18
+            curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+            echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODEJS_VERSION}.x nodistro main" > /etc/apt/sources.list.d/nodesource.list && \
+            apt-get update && \
+            apt-get install -y nodejs make g++ gcc; \
+        elif [ "$NODEJS_VERSION" = "default" ]; then \
+            # Case b: Use the base image repository's version
+            apt-get update && \
+            apt-get install -y nodejs npm make g++ gcc; \
+        elif [ "$NODEJS_VERSION" = "latest" ]; then \
+            # Case c: Use the most recent distro
+            curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
+            apt-get install -y nodejs make g++ gcc; \
+        fi && \
+        # Only proceed with these steps if we actually installed Node.js (not for "none")
+        if [ "$NODEJS_VERSION" != "none" ] && command -v node > /dev/null; then \
+            # Allow Node.js directly access Bluetooth hardware when needed
+            setcap cap_net_raw+eip $(eval readlink -f `which node`) && \
+            # Verify installed version
+            node --version && \
+            npm --version && \
+            # Install additional global packages required for Matter
+            npm install -g node-gyp; \
+        fi; \
+    fi
 
-# Clean up apt cache
-RUN apt-get clean
+# 10. Clean up apt cache and remove unused dependencies
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get autoremove -y && \
+    apt-get clean
 
 # Expose ports - these rarely change
 EXPOSE 80 10200 10300 10401 11000

@@ -126,9 +126,9 @@ docker buildx build \
   --build-arg LABEL_SCHEMA_VCS_URL="$LABEL_SCHEMA_VCS_URL" \
   --build-arg LABEL_SCHEMA_VENDOR="$LABEL_SCHEMA_VENDOR" \
   --build-arg DEBIAN_FRONTEND="noninteractive" \
-  --tag "${IMAGE_OUTPUT}:latest" \
-  --tag "${IMAGE_OUTPUT}:$VERSION-${IMAGE_BASE_NAME}" \
-  --tag "${IMAGE_OUTPUT}:${IMAGE_BASE_NAME}-${IMAGE_BASE_TAG}" \
+  --tag "${IMAGE_OUTPUT}:${IMAGE_BASE_NAME}-${IMAGE_BASE_TAG}${IMAGE_EXTRA_TAG}" \
+  --tag "${IMAGE_OUTPUT}:${IMAGE_BASE_NAME}-${IMAGE_BASE_TAG}_homeseer-${VERSION}${IMAGE_EXTRA_TAG}" \
+  --tag "${IMAGE_OUTPUT}:${IMAGE_BASE_NAME}-${IMAGE_BASE_TAG}_homeseer-latest${IMAGE_EXTRA_TAG}" \
   --platform "$BUILD_PLATFORMS" \
   --file Dockerfile \
   $OUTPUT_FLAG \
